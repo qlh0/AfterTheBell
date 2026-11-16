@@ -1,0 +1,167 @@
+{
+  "version": 1,
+  "storylets": [
+    {
+      "id": "old_note",
+      "title": "旧便签",
+      "kind": "daily_memory",
+      "narrative_goal": "notice_distance",
+      "participants": ["player", "xuzhi"],
+      "allowed_scenes": ["classroom"],
+      "preconditions": {
+        "all": [
+          {"eq": ["scene", "classroom"]},
+          {"gte": ["meaningful_turns", 2]},
+          {"eq": ["ending_phase", "none"]},
+          {"falsy": ["active_storylet"]},
+          {"flag": ["facts.old_note_seen", false]}
+        ]
+      },
+      "opening_cue": "她把练习册往回一收，一张折了几道的便签从里面滑出来，落在桌面上。她伸手去按，又停住了。",
+      "narrative_hint": "旧便签唤起两人以前的状态，与现在的距离形成对照。她可以顺势聊，也可以把话挡回去。",
+      "possible_outcomes": ["nostalgia_shared", "distance_kept", "topic_avoided"],
+      "once": true,
+      "priority": 30,
+      "scene_lock": "classroom"
+    },
+    {
+      "id": "direct_question",
+      "title": "你怎么了",
+      "kind": "player_triggered",
+      "narrative_goal": "clarify_misunderstanding",
+      "participants": ["player", "xuzhi"],
+      "allowed_scenes": ["classroom", "school_gate"],
+      "preconditions": {
+        "all": [
+          {"eq": ["ending_phase", "none"]},
+          {"falsy": ["active_storylet"]},
+          {"any": [
+            {"flag": ["facts.player_asked_distance", true]},
+            {"gte": ["meaningful_turns", 3]}
+          ]}
+        ]
+      },
+      "opening_cue": "她把手机翻过去扣在桌上，没有立刻回答。",
+      "narrative_hint": "玩家直接问起最近的冷淡。许栀先挡，挡不住才承认一部分；不会主动说清全部原因。",
+      "possible_outcomes": ["admitted_distance", "deflected", "partial_truth"],
+      "once": true,
+      "priority": 65,
+      "scene_lock": null
+    },
+    {
+      "id": "chenyu_hint",
+      "title": "陈屿的话",
+      "kind": "supporting_info",
+      "narrative_goal": "clarify_misunderstanding",
+      "participants": ["player", "xuzhi"],
+      "allowed_scenes": ["classroom"],
+      "preconditions": {
+        "all": [
+          {"eq": ["scene", "classroom"]},
+          {"eq": ["ending_phase", "none"]},
+          {"falsy": ["active_storylet"]},
+          {"any": [
+            {"flag": ["facts.chenyu_mentioned", true]},
+            {"gte": ["meaningful_turns", 5]}
+          ]}
+        ]
+      },
+      "opening_cue": "「陈屿刚才问你有没有跟他说什么。」她把「什么」两个字咬得很轻，「我说没有。」",
+      "narrative_hint": "陈屿只提供有限视角：他知道她在考虑分班、也知道她在躲玩家，但不知道误会本身。别让这条线替玩家解谜。",
+      "possible_outcomes": ["hint_received", "suspicion_raised", "topic_dropped"],
+      "once": true,
+      "priority": 45,
+      "scene_lock": "classroom"
+    },
+    {
+      "id": "late_explanation",
+      "title": "那句话",
+      "kind": "clarification",
+      "narrative_goal": "clarify_misunderstanding",
+      "participants": ["player", "xuzhi"],
+      "allowed_scenes": ["classroom", "school_gate"],
+      "preconditions": {
+        "all": [
+          {"eq": ["ending_phase", "none"]},
+          {"falsy": ["active_storylet"]},
+          {"flag": ["facts.misunderstanding_discussed", true]},
+          {"gte": ["relationship.trust", 38]}
+        ]
+      },
+      "opening_cue": "她停了很久，才说：「你那天说的那句话，我在旁边听到了。」",
+      "narrative_hint": "把误解摆上桌。结果不预设：可以澄清、可以只解开一半、也可以谈得更僵。她不会因为一句解释就立刻完全相信。",
+      "possible_outcomes": ["clarified", "partially_clarified", "worse"],
+      "once": true,
+      "priority": 80,
+      "scene_lock": null
+    },
+    {
+      "id": "class_choice",
+      "title": "折起来的那张表",
+      "kind": "reality_conflict",
+      "narrative_goal": "discuss_class_change",
+      "participants": ["player", "xuzhi"],
+      "allowed_scenes": ["classroom", "school_gate"],
+      "preconditions": {
+        "all": [
+          {"eq": ["ending_phase", "none"]},
+          {"falsy": ["active_storylet"]},
+          {"any": [
+            {"flag": ["facts.player_knows_class_change", true]},
+            {"gte": ["meaningful_turns", 6]}
+          ]}
+        ]
+      },
+      "opening_cue": "桌角那张对折的纸被她按住：「这个，你先别看了。」",
+      "narrative_hint": "谈分班与之后怎么相处。她会说清这是自己的决定；玩家可以支持、可以不安，但不能替她决定。",
+      "possible_outcomes": ["discussed_respectfully", "conflict_emerged", "topic_avoided"],
+      "once": true,
+      "priority": 70,
+      "scene_lock": null
+    },
+    {
+      "id": "walk_home",
+      "title": "一起走一段",
+      "kind": "relationship",
+      "narrative_goal": "define_relationship",
+      "participants": ["player", "xuzhi"],
+      "allowed_scenes": ["school_gate"],
+      "preconditions": {
+        "all": [
+          {"eq": ["scene", "school_gate"]},
+          {"in": ["ending_phase", ["none", "eligible"]]},
+          {"falsy": ["active_storylet"]},
+          {"gte": ["relationship.trust", 42]},
+          {"flag": ["facts.walk_home_done", false]}
+        ]
+      },
+      "opening_cue": "她把书包带往上提了提，站在校门口的路灯下没动：「你往哪边走？」",
+      "narrative_hint": "创造一段自然的并肩路。玩家可以拒绝同行，事件不强制成功。",
+      "possible_outcomes": ["walked_together", "walked_apart", "declined"],
+      "once": true,
+      "priority": 60,
+      "scene_lock": "school_gate"
+    },
+    {
+      "id": "school_gate_finale",
+      "title": "校门口",
+      "kind": "finale",
+      "narrative_goal": "define_relationship",
+      "participants": ["player", "xuzhi"],
+      "allowed_scenes": ["school_gate"],
+      "preconditions": {
+        "all": [
+          {"eq": ["scene", "school_gate"]},
+          {"in": ["ending_phase", ["eligible", "prepared"]]},
+          {"flag": ["facts.finale_resolved", false]}
+        ]
+      },
+      "opening_cue": "校门口的人已经走空了。她把没拉开的拉链又拉了一下，像是给自己一点时间。",
+      "narrative_hint": "最后一次交流。玩家说什么都可以，她的回应依据双方已建立的理解与她的自主意愿，不被强制安排结局。",
+      "possible_outcomes": ["romance_committed", "friends_committed", "parted"],
+      "once": true,
+      "priority": 100,
+      "scene_lock": "school_gate"
+    }
+  ]
+}

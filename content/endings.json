@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "evaluation_order": ["romance", "friends", "missed"],
+  "endings": {
+    "romance": {
+      "id": "romance",
+      "title": "下学期，也一起走吧",
+      "subtitle": "TRUE END",
+      "gates": {
+        "all": [
+          {"flag": ["facts.misunderstanding_resolved", true]},
+          {"flag": ["facts.class_change_discussed", true]},
+          {"flag": ["facts.player_expressed_romance", true]},
+          {"eq": ["npc.mutual_intent", "romance"]},
+          {"gte": ["relationship.trust", 60]},
+          {"gte": ["relationship.respect_for_autonomy", 55]},
+          {"in": ["narrative_goals.define_relationship", ["done"]]}
+        ]
+      },
+      "reason_if_missing": "需要：误会真正解开、认真谈过分班、玩家明确表达心意、她也愿意、且你尊重过她的选择。",
+      "epilogue": [
+        "路灯把两个人的影子拉长，交叠在同一个方向。",
+        "「重点班我还是要考的。」她说，「考不上，你也别笑我。」",
+        "「那我们下学期……」你话没说完，她先接了过去：「一起走呗。反正顺路。」",
+        "她把书包带往上一提，往前走了两步，又回头看你有没有跟上。"
+      ],
+      "closing_line": "——那天放学后，你们第一次把「以后」说出口。"
+    },
+    "friends": {
+      "id": "friends",
+      "title": "还是和以前一样",
+      "subtitle": "GOOD END",
+      "gates": {
+        "all": [
+          {"flag": ["facts.misunderstanding_discussed", true]},
+          {"gte": ["relationship.trust", 40]},
+          {"ne": ["npc.mutual_intent", "declined"]}
+        ]
+      },
+      "reason_if_missing": "至少要把话说到能彼此听懂的程度（误会进入讨论、信任没有塌），才能保住这段关系。",
+      "epilogue": [
+        "「所以那天……你不是那个意思。」她像是在确认，又像是在跟自己说。",
+        "「那就好。」她笑了一下，很短，「我还以为我搞砸了。」",
+        "你们在校门口分开，各走一边。走了几步，她回头喊你名字：「明天值日别迟到啊。」",
+        "有些话没说出口，但书还在同一个书包里，路还是同一条。"
+      ],
+      "closing_line": "——那天放学后，你们决定先把朋友做稳。"
+    },
+    "missed": {
+      "id": "missed",
+      "title": "那天没说出口的话",
+      "subtitle": "END",
+      "gates": {
+        "all": []
+      },
+      "reason_if_missing": "这是兜底结局：当误会、分班与彼此的心意都没能真正谈开时，故事平静地收在这里。",
+      "epilogue": [
+        "「那我先走了。」她说完就真的走了，没有回头。",
+        "校门口的风把白天的热气吹散了。你想起她桌上那张对折的纸，想起她欲言又止的样子。",
+        "你们什么都没说错，只是都没有说。",
+        "第二天她还是照常把笔记推到你桌子中间，好像什么都没发生过。"
+      ],
+      "closing_line": "——那天放学后，有些话留在了教室里。"
+    }
+  }
+}

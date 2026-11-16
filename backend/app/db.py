@@ -1,0 +1,383 @@
+"""SQLite 持久化层（标准库 sqlite3，无 ORM）。
+
+表：
+- games            当前权威状态（每局一行）
+- state_snapshots  每次提交后的完整快照（支持读档/调试）
+- requests         request_id → 响应 JSON（重试幂等）
+- turns            对话流水
+- events           事件/剧情日志（含因果）
+- memories         重要记忆（首版规则+关键词检索）
+- llm_calls        LLM 调用指标
+"""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+import uuid
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Iterator
+
+from .config import DB_PATH
+from . import game_state as gs
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS games (
+    game_id        TEXT PRIMARY KEY,
+    state_version  INTEGER NOT NULL,
+    state_json     TEXT NOT NULL,
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS state_snapshots (
+    game_id     TEXT NOT NULL,
+    version     INTEGER NOT NULL,
+    state_json  TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (game_id, version)
+);
+
+CREATE TABLE IF NOT EXISTS requests (
+    game_id     TEXT NOT NULL,
+    request_id  TEXT NOT NULL,
+    endpoint    TEXT NOT NULL,
+    response_json TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (game_id, request_id)
+);
+
+CREATE TABLE IF NOT EXISTS turns (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id     TEXT NOT NULL,
+    turn_index  INTEGER NOT NULL,
+    role        TEXT NOT NULL,
+    text        TEXT NOT NULL,
+    meta_json   TEXT NOT NULL DEFAULT '{}',
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_turns_game ON turns(game_id, turn_index);
+
+CREATE TABLE IF NOT EXISTS events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id     TEXT NOT NULL,
+    event_id    TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    status      TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    state_version INTEGER NOT NULL,
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_events_game ON events(game_id, id);
+
+CREATE TABLE IF NOT EXISTS memories (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id     TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    content     TEXT NOT NULL,
+    importance  INTEGER NOT NULL DEFAULT 3,
+    turn_index  INTEGER NOT NULL DEFAULT 0,
+    source_event_id TEXT,
+    tags_json   TEXT NOT NULL DEFAULT '[]',
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_memories_game ON memories(game_id, importance DESC);
+
+CREATE TABLE IF NOT EXISTS llm_calls (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id     TEXT NOT NULL,
+    purpose     TEXT NOT NULL,
+    model       TEXT NOT NULL,
+    latency_ms  INTEGER NOT NULL DEFAULT 0,
+    prompt_tokens INTEGER NOT NULL DEFAULT 0,
+    completion_tokens INTEGER NOT NULL DEFAULT 0,
+    ok          INTEGER NOT NULL DEFAULT 1,
+    error       TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL
+);
+"""
+
+
+def utcnow() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+class Database:
+    def __init__(self, path: Path | str = DB_PATH) -> None:
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._init_schema()
+
+    # ---------- 连接与事务 ----------
+
+    def connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.path, timeout=15.0, isolation_level=None)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("PRAGMA busy_timeout=15000")
+        return conn
+
+    @contextmanager
+    def tx(self) -> Iterator[sqlite3.Connection]:
+        """写事务：BEGIN IMMEDIATE 串行化同一数据库的写入，避免状态竞态。"""
+        conn = self.connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            yield conn
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+        finally:
+            conn.close()
+
+    @contextmanager
+    def read(self) -> Iterator[sqlite3.Connection]:
+        conn = self.connect()
+        try:
+            yield conn
+        finally:
+            conn.close()
+
+    def _init_schema(self) -> None:
+        conn = self.connect()
+        try:
+            conn.executescript(SCHEMA)
+        finally:
+            conn.close()
+
+    # ---------- 游戏状态 ----------
+
+    def create_game(self, state: dict[str, Any]) -> None:
+        now = utcnow()
+        with self.tx() as conn:
+            conn.execute(
+                "INSERT INTO games (game_id, state_version, state_json, created_at, updated_at) VALUES (?,?,?,?,?)",
+                (state["game_id"], state["state_version"], gs.dump_state(state), now, now),
+            )
+            conn.execute(
+                "INSERT INTO state_snapshots (game_id, version, state_json, created_at) VALUES (?,?,?,?)",
+                (state["game_id"], state["state_version"], gs.dump_state(state), now),
+            )
+
+    def load_state(self, game_id: str) -> dict[str, Any] | None:
+        with self.read() as conn:
+            row = conn.execute("SELECT state_json FROM games WHERE game_id=?", (game_id,)).fetchone()
+        if row is None:
+            return None
+        state = gs.load_state(row["state_json"])
+        gs.validate_state(state)
+        return state
+
+    def save_state(self, state: dict[str, Any], snapshot: bool = True) -> None:
+        gs.validate_state(state)
+        now = utcnow()
+        payload = gs.dump_state(state)
+        with self.tx() as conn:
+            conn.execute(
+                "UPDATE games SET state_version=?, state_json=?, updated_at=? WHERE game_id=?",
+                (state["state_version"], payload, now, state["game_id"]),
+            )
+            if snapshot:
+                conn.execute(
+                    "INSERT OR REPLACE INTO state_snapshots (game_id, version, state_json, created_at) VALUES (?,?,?,?)",
+                    (state["game_id"], state["state_version"], payload, now),
+                )
+
+    def save_state_cas(
+        self,
+        state: dict[str, Any],
+        expected_version: int,
+        request_id: str | None = None,
+        endpoint: str = "",
+        response_payload: dict[str, Any] | None = None,
+    ) -> bool:
+        """乐观并发提交：只有库里的 version 仍等于 expected_version 才写入。
+
+        状态、快照与幂等响应在同一个事务里提交，避免「画面显示成功、库里没更新」。
+        """
+        gs.validate_state(state)
+        now = utcnow()
+        payload = gs.dump_state(state)
+        with self.tx() as conn:
+            cur = conn.execute(
+                "UPDATE games SET state_version=?, state_json=?, updated_at=?"
+                " WHERE game_id=? AND state_version=?",
+                (state["state_version"], payload, now, state["game_id"], expected_version),
+            )
+            if cur.rowcount == 0:
+                return False
+            conn.execute(
+                "INSERT OR REPLACE INTO state_snapshots (game_id, version, state_json, created_at) VALUES (?,?,?,?)",
+                (state["game_id"], state["state_version"], payload, now),
+            )
+            if request_id and response_payload is not None:
+                conn.execute(
+                    "INSERT OR REPLACE INTO requests (game_id, request_id, endpoint, response_json, created_at)"
+                    " VALUES (?,?,?,?,?)",
+                    (
+                        state["game_id"],
+                        request_id,
+                        endpoint,
+                        json.dumps(response_payload, ensure_ascii=False),
+                        now,
+                    ),
+                )
+        return True
+
+    def load_snapshot(self, game_id: str, version: int) -> dict[str, Any] | None:
+        with self.read() as conn:
+            row = conn.execute(
+                "SELECT state_json FROM state_snapshots WHERE game_id=? AND version=?", (game_id, version)
+            ).fetchone()
+        return gs.load_state(row["state_json"]) if row else None
+
+    def list_games(self, limit: int = 20) -> list[dict[str, Any]]:
+        with self.read() as conn:
+            rows = conn.execute(
+                "SELECT game_id, state_version, updated_at FROM games ORDER BY updated_at DESC LIMIT ?", (limit,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ---------- 幂等 ----------
+
+    def get_cached_response(self, game_id: str, request_id: str) -> dict[str, Any] | None:
+        with self.read() as conn:
+            row = conn.execute(
+                "SELECT response_json FROM requests WHERE game_id=? AND request_id=?", (game_id, request_id)
+            ).fetchone()
+        return json.loads(row["response_json"]) if row else None
+
+    def put_cached_response(self, game_id: str, request_id: str, endpoint: str, payload: dict[str, Any]) -> None:
+        with self.tx() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO requests (game_id, request_id, endpoint, response_json, created_at)"
+                " VALUES (?,?,?,?,?)",
+                (game_id, request_id, endpoint, json.dumps(payload, ensure_ascii=False), utcnow()),
+            )
+
+    # ---------- 流水 / 事件 / 记忆 / 指标 ----------
+
+    def add_turn(
+        self,
+        game_id: str,
+        turn_index: int,
+        role: str,
+        text: str,
+        meta: dict[str, Any] | None = None,
+    ) -> None:
+        with self.tx() as conn:
+            conn.execute(
+                "INSERT INTO turns (game_id, turn_index, role, text, meta_json, created_at) VALUES (?,?,?,?,?,?)",
+                (game_id, turn_index, role, text, json.dumps(meta or {}, ensure_ascii=False), utcnow()),
+            )
+
+    def recent_turns(self, game_id: str, limit: int = 8) -> list[dict[str, Any]]:
+        with self.read() as conn:
+            rows = conn.execute(
+                "SELECT role, text, meta_json, turn_index FROM turns WHERE game_id=? ORDER BY id DESC LIMIT ?",
+                (game_id, limit),
+            ).fetchall()
+        out = [{"role": r["role"], "text": r["text"], "turn_index": r["turn_index"]} for r in rows]
+        return list(reversed(out))
+
+    def add_event(
+        self,
+        game_id: str,
+        event_id: str,
+        kind: str,
+        status: str,
+        payload: dict[str, Any] | None = None,
+        state_version: int = 0,
+    ) -> None:
+        with self.tx() as conn:
+            conn.execute(
+                "INSERT INTO events (game_id, event_id, kind, status, payload_json, state_version, created_at)"
+                " VALUES (?,?,?,?,?,?,?)",
+                (
+                    game_id,
+                    event_id,
+                    kind,
+                    status,
+                    json.dumps(payload or {}, ensure_ascii=False),
+                    state_version,
+                    utcnow(),
+                ),
+            )
+
+    def list_events(self, game_id: str, limit: int = 200) -> list[dict[str, Any]]:
+        with self.read() as conn:
+            rows = conn.execute(
+                "SELECT event_id, kind, status, payload_json, state_version, created_at FROM events"
+                " WHERE game_id=? ORDER BY id ASC LIMIT ?",
+                (game_id, limit),
+            ).fetchall()
+        return [
+            {
+                "event_id": r["event_id"],
+                "kind": r["kind"],
+                "status": r["status"],
+                "payload": json.loads(r["payload_json"]),
+                "state_version": r["state_version"],
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
+
+    def add_memory(
+        self,
+        game_id: str,
+        kind: str,
+        content: str,
+        importance: int = 3,
+        turn_index: int = 0,
+        source_event_id: str | None = None,
+        tags: list[str] | None = None,
+    ) -> None:
+        with self.tx() as conn:
+            conn.execute(
+                "INSERT INTO memories (game_id, kind, content, importance, turn_index, source_event_id, tags_json, created_at)"
+                " VALUES (?,?,?,?,?,?,?,?)",
+                (game_id, kind, content, importance, turn_index, source_event_id,
+                 json.dumps(tags or [], ensure_ascii=False), utcnow()),
+            )
+
+    def add_llm_call(
+        self,
+        game_id: str,
+        purpose: str,
+        model: str,
+        latency_ms: int,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        ok: bool = True,
+        error: str = "",
+    ) -> None:
+        with self.tx() as conn:
+            conn.execute(
+                "INSERT INTO llm_calls (game_id, purpose, model, latency_ms, prompt_tokens, completion_tokens, ok, error, created_at)"
+                " VALUES (?,?,?,?,?,?,?,?,?)",
+                (game_id, purpose, model, latency_ms, prompt_tokens, completion_tokens, 1 if ok else 0, error, utcnow()),
+            )
+
+    def llm_metrics(self, game_id: str) -> dict[str, Any]:
+        with self.read() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) n, AVG(latency_ms) avg_ms, SUM(ok=0) fails,"
+                " SUM(prompt_tokens) pt, SUM(completion_tokens) ct FROM llm_calls WHERE game_id=?",
+                (game_id,),
+            ).fetchone()
+        return {
+            "calls": row["n"] or 0,
+            "avg_latency_ms": round(row["avg_ms"] or 0, 1),
+            "failures": row["fails"] or 0,
+            "prompt_tokens": row["pt"] or 0,
+            "completion_tokens": row["ct"] or 0,
+        }
+
+
+def new_game_id() -> str:
+    return "demo_" + uuid.uuid4().hex[:8]

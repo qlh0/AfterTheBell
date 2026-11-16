@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "goals": {
+    "notice_distance": {
+      "id": "notice_distance",
+      "label": "发现关系异常",
+      "weight": 40,
+      "description": "让玩家注意到许栀最近的疏远，并作出有效反应（追问、试探、沉默观察都算）。",
+      "completion_evidence": "玩家对疏远作出有效回应，或许栀在本章明确提到自己在躲。",
+      "done_when": ["flag:facts.distance_noticed", "flag:facts.player_asked_distance"],
+      "soft_deadline_turn": 4
+    },
+    "clarify_misunderstanding": {
+      "id": "clarify_misunderstanding",
+      "label": "认识或澄清误会",
+      "weight": 60,
+      "description": "让『那句话』被摆到台面上。可以澄清、也可以谈崩，不预设必须和解。",
+      "completion_evidence": "双方对那句话的含义有过明确交流；允许以未解决状态收束。",
+      "done_when": ["flag:facts.misunderstanding_discussed", "flag:facts.misunderstanding_resolved"],
+      "soft_deadline_turn": 8
+    },
+    "discuss_class_change": {
+      "id": "discuss_class_change",
+      "label": "面对分班现实",
+      "weight": 55,
+      "description": "让分班从『一个消息』变成『两个人要面对的事』，重点是她自己的选择被尊重。",
+      "completion_evidence": "双方谈过分班计划以及之后怎么相处，而不只是听到『分班』两个字。",
+      "done_when": ["flag:facts.class_change_discussed"],
+      "soft_deadline_turn": 9
+    },
+    "define_relationship": {
+      "id": "define_relationship",
+      "label": "最终关系抉择",
+      "weight": 100,
+      "description": "在离校前给出一次真正的选择：告白、做朋友、或暂时各自走。",
+      "completion_evidence": "双方意愿已表达，当前章节可合理结束。",
+      "done_when": ["flag:facts.finale_resolved"],
+      "soft_deadline_turn": 12
+    }
+  },
+  "pacing": {
+    "target_meaningful_turns_min": 10,
+    "target_meaningful_turns_max": 16,
+    "default_meaningful_turn_budget": 12,
+    "soft_end_at": 10,
+    "hard_end_at": 16
+  }
+}
