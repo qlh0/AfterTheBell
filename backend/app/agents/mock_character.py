@@ -16,6 +16,7 @@ from typing import Any
 from .. import game_state as gs
 from ..narrative.storylets import Storylet
 from ..rules.meaningful_turn import Analysis, primary_topic
+from ..rules.outcome_rules import default_outcome
 
 
 @dataclass
@@ -26,6 +27,13 @@ class AgentReply:
     storylet_outcome: str | None = None
     source: str = "mock"
     beat: str | None = None  # 可选的舞台提示（先于对白显示）
+    # LLM 指标（mock 路径保持 0）
+    model: str = ""
+    latency_ms: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    error: str = ""
+    notes: list[str] = field(default_factory=list)
 
 
 TOPIC_LINES: dict[str, list[str]] = {
@@ -195,43 +203,6 @@ FALLBACK_LINES: dict[str, list[str]] = {
 _INTERRUPT_ROMANCE = "她手里的事停了一下。"
 
 
-def _suggest_outcome(storylet: Storylet, analysis: Analysis) -> str | None:
-    outcomes = storylet.possible_outcomes
-    if storylet.id == "late_explanation":
-        if analysis.controlling:
-            return "worse"
-        if "explain_own_words" in analysis.actions:
-            return "clarified" if "clarified" in outcomes else outcomes[0]
-        return "partially_clarified"
-    if storylet.id == "class_choice":
-        if analysis.controlling or "control_autonomy" in analysis.actions:
-            return "conflict_emerged"
-        if "support_autonomy" in analysis.actions or analysis.topics & {"class_change", "care", "romance"}:
-            return "discussed_respectfully"
-        return "topic_avoided"
-    if storylet.id == "walk_home":
-        return "walked_apart" if "leave" in analysis.topics else "walked_together"
-    if storylet.id == "old_note":
-        if analysis.controlling:
-            return "distance_kept"
-        if analysis.topics & {"distance", "romance", "care", "misunderstanding"}:
-            return "nostalgia_shared"
-        return "topic_avoided"
-    if storylet.id == "direct_question":
-        if analysis.topics & {"distance", "misunderstanding", "care"}:
-            return "admitted_distance"
-        if analysis.topics & {"class_change", "chenyu"}:
-            return "partial_truth"
-        return "deflected"
-    if storylet.id == "chenyu_hint":
-        if "chenyu" in analysis.topics:
-            return "hint_received"
-        if analysis.topics & {"distance", "misunderstanding"}:
-            return "topic_dropped"
-        return "suspicion_raised"
-    return outcomes[0] if outcomes else None
-
-
 def _line_for(pool: list[str], index: int, fallback_emotion: str) -> str:
     if pool:
         return pool[index % len(pool)]
@@ -268,7 +239,7 @@ def reply(
         )
 
     if storylet is not None:
-        outcome = _suggest_outcome(storylet, analysis)
+        outcome = default_outcome(storylet, analysis)
         buckets = STORYLET_LINES.get(storylet.id, {})
         pool = buckets.get(outcome or "") or buckets.get("topic_avoided") or []
         line = _line_for(pool, idx, emotion)

@@ -1,11 +1,20 @@
 ## 游戏内界面：聊天面板、等待提示、后端离线提示、结局卡。
 
+style chat_button is button:
+    padding (10, 4)
+
+style chat_button_text is button_text:
+    size 18
+    color "#dbe4f2"
+    hover_color "#ffe0b5"
+    insensitive_color "#5a6478"
+
 screen chat_ui():
     modal True
     zorder 50
 
     if store.selfcheck_mode:
-        timer 0.8 action Return(("quit", None))
+        timer 0.8 action [Function(atb_screenshot, "chat"), Return(("quit", None))]
 
     frame:
         background Solid("#0a0e16e8")
@@ -25,14 +34,13 @@ screen chat_ui():
                 if store.current_event_title:
                     text "- [current_event_title]" size 15 color "#93a1b8" yalign 0.5
                 null width 1
-                text "第 [store.turn_index] 回合" size 13 color "#6f7d94" xalign 1.0
+                text "第[turn_index]回合" size 13 color "#6f7d94" xalign 1.0
 
             viewport:
                 ysize 466
                 mousewheel True
                 draggable True
                 yinitial 1.0
-                scrollbars "vertical"
 
                 vbox:
                     spacing 14
@@ -64,18 +72,19 @@ screen chat_ui():
                     length 200
                     size 20
                     color "#eef2f8"
-                    caret Solid("#f2c9a2")
+                    caret Solid("#f2c9a2", xsize=2)
                     xsize 500
 
             hbox:
                 spacing 10
                 textbutton "发送":
+                    style "chat_button"
                     action If(store.input_text.strip() != "", Return(("send", store.input_text)), NullAction())
                     sensitive store.input_text.strip() != ""
-                textbutton "推进时间" action Return(("advance", None))
-                textbutton "结束本局" action Return(("quit", None))
+                textbutton "推进时间" style "chat_button" action Return(("advance", None))
+                textbutton "结束本局" style "chat_button" action Return(("quit", None))
                 null width 1
-                text "Enter 发送" size 12 color "#5d6a80" yalign 0.6
+                text "Enter 发送" size 12 color "#6f7d94" yalign 0.6
 
     key "K_RETURN" action If(store.input_text.strip() != "", Return(("send", store.input_text)), NullAction())
 

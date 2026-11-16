@@ -21,14 +21,17 @@ def reply(
     analysis: Analysis,
     storylet: Storylet | None,
     expected_ending: str | None = None,
+    db: Any = None,
+    game_id: str | None = None,
 ) -> AgentReply:
     if config.LLM_MODE == "llm" and config.llm_configured():
         try:
             from .llm_character import llm_reply
 
-            return llm_reply(state, analysis, storylet, expected_ending)
+            return llm_reply(state, analysis, storylet, expected_ending, db=db, game_id=game_id)
         except Exception as exc:  # 网络/格式失败都必须兜底，界面不能卡死
             fallback = mock_character.reply(state, analysis, storylet, expected_ending)
             fallback.source = f"fallback:{type(exc).__name__}"
+            fallback.error = f"{type(exc).__name__}: {exc}"
             return fallback
     return mock_character.reply(state, analysis, storylet, expected_ending)

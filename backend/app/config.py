@@ -39,6 +39,7 @@ LLM_MODEL = os.environ.get("LLM_MODEL", "deepseek-chat")
 LLM_TIMEOUT_SECONDS = float(os.environ.get("LLM_TIMEOUT_SECONDS", "30"))
 LLM_MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "1"))
 LLM_MAX_OUTPUT_TOKENS = int(os.environ.get("LLM_MAX_OUTPUT_TOKENS", "400"))
+LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0.85"))
 
 DIRECTOR_ENABLED = os.environ.get("ATB_DIRECTOR", "0").strip() == "1"
 

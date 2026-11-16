@@ -125,14 +125,22 @@ class Engine:
         expected_ending = None
         if active is not None and active.kind == "finale":
             expected_ending = ending_rules.preview_ending(state, self.content)
-        reply = character.reply(state, analysis, active, expected_ending)
+        reply = character.reply(
+            state, analysis, active, expected_ending, db=self.db, game_id=game_id
+        )
+        self._record_llm(game_id, reply)
         if getattr(reply, "beat", None):
             narration.append(reply.beat)
 
         # 4. 提交动作（白名单 + 每回合上限）
+        #    玩家意图以规则解析为准；模型的动作提议只作记录，不能替玩家表态。
         action_changes, notes = action_rules.commit_actions(
-            state, reply.actions or analysis.actions, reason=f"turn:{state['turn_index']}"
+            state, analysis.actions, reason=f"turn:{state['turn_index']}"
         )
+        if reply.actions and set(reply.actions) != set(analysis.actions):
+            notes.append("llm_actions:" + ",".join(sorted(reply.actions)))
+        if reply.notes:
+            notes.extend(reply.notes)
         changes.extend(action_changes)
 
         # 5. 事件收尾：结果依据本回合实际互动
@@ -171,7 +179,10 @@ class Engine:
                         "event_id": active.id,
                         "kind": "storylet",
                         "status": "resolved",
-                        "payload": {"outcome": resolution.outcome},
+                        "payload": {
+                            "outcome": resolution.outcome,
+                            "proposed_outcome": reply.storylet_outcome,
+                        },
                     })
                     if resolution.memory is not None:
                         kind, content, importance, tags = resolution.memory
@@ -232,7 +243,10 @@ class Engine:
                 })
 
         # 10. 收尾：情绪 → 版本 → 乐观并发提交 → 日志
-        state["npc"]["current_emotion"] = gs.derive_emotion(state)
+        emotion = reply.emotion if reply.emotion in gs.EMOTIONS else gs.derive_emotion(state)
+        if state["relationship"]["respect_for_autonomy"] < 35 or state["ending_phase"] == "committed":
+            emotion = gs.derive_emotion(state)
+        state["npc"]["current_emotion"] = emotion
         state["state_version"] = base_version + 1
         current_active = self.content.storylets.get(state["active_storylet"])
 
@@ -383,6 +397,21 @@ class Engine:
 
     # ---------------- 内部 ----------------
 
+    def _record_llm(self, game_id: str, reply: AgentReply) -> None:
+        """把这次角色调用的指标落库；mock 路径没有 model，直接跳过。"""
+        if not reply.model:
+            return
+        self.db.add_llm_call(
+            game_id=game_id,
+            purpose="character",
+            model=reply.model,
+            latency_ms=reply.latency_ms,
+            prompt_tokens=reply.prompt_tokens,
+            completion_tokens=reply.completion_tokens,
+            ok=reply.source == "llm",
+            error=reply.error,
+        )
+
     def _turn_view(self, state: dict[str, Any]) -> dict[str, Any]:
         return {
             "index": state["turn_index"],
@@ -453,6 +482,12 @@ class Engine:
                 "meaningful_reason": analysis.meaningful_reason,
                 "mood_shift": self._mood_shift(changes),
                 "notes": notes,
+                "llm": {
+                    "model": reply.model or None,
+                    "latency_ms": reply.latency_ms,
+                    "input_tokens": reply.prompt_tokens,
+                    "output_tokens": reply.completion_tokens,
+                },
             },
         }
 

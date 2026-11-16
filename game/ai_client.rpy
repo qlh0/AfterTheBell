@@ -169,6 +169,13 @@ init -10 python:
         atb_render_scene(transition=False)
         return None
 
+    def atb_screenshot(name):
+        """开发自检用：把当前画面存到 game/ 下，便于核对 UI。"""
+        try:
+            renpy.screenshot(os.path.join(config.gamedir, "shot_%s.png" % name))
+        except Exception:
+            pass
+
     def atb_selfcheck_reset():
         for path in (os.path.join(config.gamedir, "selfcheck.txt"),
                      r"D:\AfterTheBell\game\selfcheck.txt"):

@@ -1,0 +1,236 @@
+"""把「状态 + 记忆 + 最近对话 + 当前事件」组装成角色 LLM 的 prompt。
+
+原则：
+- 只给她「她自己会知道的东西」；客观真相只作为"绝对不能主动说"的警戒线出现。
+- 不给数字，只给定性描述（低/一般/较高），避免模型把数值当台词说出来。
+- 玩家没表达过的立场，不写进 prompt，模型也就无从替玩家表态。
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from .. import game_state as gs
+from ..config import PROMPTS_DIR
+from ..content import Content
+from ..narrative.storylets import Storylet
+from ..rules.actions import ACTIONS
+from ..rules.meaningful_turn import Analysis
+
+_SYSTEM_FILE = PROMPTS_DIR / "character_system.txt"
+
+EMOTION_CN = {
+    "guarded": "戒备/回避",
+    "normal": "平常",
+    "relieved": "松了口气",
+    "happy": "心情不错",
+    "hurt": "被伤到",
+    "sad": "低落",
+    "annoyed": "有点恼",
+    "soft": "心软",
+}
+
+TOPIC_CN = {
+    "distance": "最近的疏远",
+    "misunderstanding": "那句被误解的话",
+    "class_change": "分班/重点班",
+    "romance": "恋爱与心意",
+    "chenyu": "陈屿",
+    "care": "关心她",
+    "apology": "道歉",
+    "controlling": "替她做决定",
+    "leave": "离开/回家",
+    "smalltalk": "闲聊",
+}
+
+MUTUAL_INTENT_CN = {
+    "unknown": "还没说清",
+    "romance": "彼此有好感，但还没定下来",
+    "friendship": "倾向于继续做朋友",
+    "declined": "有点想退开",
+}
+
+
+def _qualify(value: int) -> str:
+    if value < 25:
+        return "很低"
+    if value < 40:
+        return "偏低"
+    if value < 55:
+        return "一般"
+    if value < 70:
+        return "较高"
+    if value < 85:
+        return "高"
+    return "很高"
+
+
+def _facts_lines(state: dict[str, Any]) -> list[str]:
+    facts = state["facts"]
+    lines: list[str] = []
+    if facts["player_asked_distance"]:
+        lines.append("玩家问过你最近为什么冷淡；你承认了一点点。")
+    if facts["misunderstanding_discussed"]:
+        lines.append("你们把「那句话」摆到台面上谈过。")
+    if facts["misunderstanding_resolved"]:
+        lines.append("那件事已经说开了：你知道玩家当时不是在说你。")
+    if facts["class_change_discussed"]:
+        lines.append("你们认真谈过你要报理科重点班这件事。")
+    if facts["player_expressed_romance"]:
+        lines.append("玩家明确对你表达过心意。")
+    if facts["player_controlling"]:
+        lines.append("玩家曾经想替你做决定，你当时很不舒服，明确说过「这是我的事」。")
+    if facts["player_promised"]:
+        lines.append("玩家对你做出过承诺。")
+    if facts["walk_home_done"]:
+        lines.append("你们一起走过一段放学路。")
+    if facts["old_note_seen"]:
+        lines.append("你翻出过一张去年的旧便签，那是你们以前传的。")
+    if facts["chenyu_hint_seen"]:
+        lines.append("陈屿提到过玩家，也提到过你最近的状态。")
+    if not lines:
+        lines.append("今天你们还没有把任何一件关键的事说明白。")
+    return lines
+
+
+def _recent_lines(recent_turns: list[dict[str, Any]]) -> list[str]:
+    lines: list[str] = []
+    for turn in recent_turns:
+        role = turn.get("role")
+        text = (turn.get("text") or "").strip()
+        if not text:
+            continue
+        if role == "player":
+            lines.append(f"玩家：{text}")
+        elif role == "xuzhi":
+            lines.append(f"你：{text}")
+        elif role == "narration":
+            lines.append(f"（{text}）")
+    return lines[-12:]
+
+
+def _action_lines() -> list[str]:
+    """只给出白名单，并说明"只能提议玩家真的表达过的动作"。"""
+    return [f"- {aid}：{spec['label']}" for aid, spec in ACTIONS.items()]
+
+
+def _pacing_note(state: dict[str, Any]) -> str:
+    p = gs.progress(state)
+    budget = state["budget"]
+    if p >= int(budget["soft_end_at"]):
+        return "时间不早了，你们已经聊了一阵。她心里知道再不说可能就没机会了，但也随时可能选择逃开。"
+    if p >= int(budget["soft_end_at"]) - 3:
+        return "天已经暗下来了。她开始意识到这场对话不会一直持续下去。"
+    return "离天黑还有时间，气氛还没有被逼到必须摊牌。"
+
+
+def system_prompt(content: Content) -> str:
+    char = content.characters["xuzhi"]
+    base = _SYSTEM_FILE.read_text(encoding="utf-8") if _SYSTEM_FILE.exists() else ""
+    lines = [
+        base.strip(),
+        "",
+        "【补充设定】",
+        f"人设：{char['persona']}",
+        "说话方式：" + "；".join(char.get("speech_rules", [])),
+        "你知道的事：" + "；".join(char.get("knows", [])),
+        "你不知道的事：" + "；".join(char.get("does_not_know", [])),
+        "",
+        "【绝对不能主动说出口的】",
+        *[f"- {s}" for s in char.get("secrets_not_for_player_view", [])],
+        "",
+        "【绝不能做的】",
+        *[f"- 不要：{s}" for s in char.get("cannot_be_forced_into", [])],
+        "- 不要替玩家说话、不要替玩家决定感情、不要读心。",
+        "- 不要在台词里出现任何数字、属性名、系统词。",
+        "- 只输出一个 JSON 对象，不要 markdown 代码块，不要解释。",
+    ]
+    return "\n".join(lines)
+
+
+def user_prompt(
+    state: dict[str, Any],
+    analysis: Analysis,
+    storylet: Storylet | None,
+    content: Content,
+    recent_turns: list[dict[str, Any]],
+    memories: list[dict[str, Any]],
+) -> str:
+    char = content.characters["xuzhi"]
+    scene_cn = "教室（放学后）" if state["scene"] == "classroom" else "校门口（傍晚）"
+    rel = state["relationship"]
+    emotion = gs.derive_emotion(state)
+
+    parts: list[str] = [
+        "【场景】" + scene_cn,
+        f"【进度】这是今天对话的第 {state['turn_index']} 轮，其中真正有内容的互动 {state['meaningful_turns']} 次。",
+        _pacing_note(state),
+        "",
+        "【你现在的状态】",
+        f"- 情绪：{EMOTION_CN.get(emotion, '平常')}",
+        f"- 你对玩家的信任：{_qualify(rel['trust'])}",
+        f"- 你对玩家的亲近感：{_qualify(rel['affection'])}",
+        f"- 你觉得玩家尊重你的选择吗：{_qualify(rel['respect_for_autonomy'])}",
+        f"- 你自己对玩家的心意：{char['personal_goal_note']}",
+        f"- 关系进度：{MUTUAL_INTENT_CN.get(state['npc']['mutual_intent'], '还没说清')}",
+        "",
+        "【你们之间已经发生的事】",
+        *_facts_lines(state),
+        "",
+        "【你记得的事】",
+    ]
+
+    if memories:
+        parts += [f"- {m['content']}" for m in memories]
+    else:
+        parts.append("- （还没有特别值得记住的事）")
+
+    parts += ["", "【最近说过的话】"]
+    recent = _recent_lines(recent_turns)
+    parts += recent if recent else ["- （这是你们今天的第一句话）"]
+
+    if storylet is not None:
+        parts += [
+            "",
+            f"【现在正在发生的事件】《{storylet.title}》",
+            f"- 情境：{storylet.opening_cue}",
+            f"- 这个事件的目的：{storylet.narrative_hint}",
+            "- 可能的走向：" + "、".join(storylet.possible_outcomes),
+            "- 你不需要推动它；顺着玩家的话自然反应即可，事件结果由实际发生的事决定。",
+        ]
+
+    parts += [
+        "",
+        "【玩家刚才说】",
+        f"「{analysis.text}」",
+        "（只把这句话当作玩家真的说过的内容；玩家没有表达过的立场，不要替他/她补上。）",
+        "",
+        "【你这回合可以提议的动作】",
+        "只能从下面选，最多 3 个；且只有当玩家这句话真的做了这件事时才提议：",
+        *_action_lines(),
+        "",
+        "【输出】只输出一个 JSON 对象：",
+        '{"dialogue": "你这一句台词", "emotion": "guarded|normal|relieved|happy|hurt|sad|annoyed|soft", '
+        '"actions": ["从上面选的 id"], "storylet_outcome": null}',
+        "storylet_outcome 只有在「现在正在发生的事件」存在时，才从可能的走向里选一个，否则填 null。",
+        "",
+        "【硬性要求】",
+        "- 台词 1–3 句，尽量短，符合 17 岁高中生口语；不要一段长篇独白。",
+        "- 可以回避、嘴硬、转移话题；不要因为玩家问了就全盘托出。",
+        "- 不要一次把误会、分班、心意全讲完；一次只推进一点。",
+    ]
+    return "\n".join(parts)
+
+
+def build_messages(
+    state: dict[str, Any],
+    analysis: Analysis,
+    storylet: Storylet | None,
+    content: Content,
+    recent_turns: list[dict[str, Any]],
+    memories: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    return [
+        {"role": "system", "content": system_prompt(content)},
+        {"role": "user", "content": user_prompt(state, analysis, storylet, content, recent_turns, memories)},
+    ]

@@ -12,9 +12,8 @@ image xuzhi guarded = "images/xuzhi_guarded.png"
 image xuzhi smile = "images/xuzhi_smile.png"
 
 transform sprite_pos:
-    xalign 0.07
+    xalign 0.10
     yalign 1.0
-    yoffset 24
 
 default persistent.endings_seen = {}
 
@@ -53,6 +52,7 @@ label selfcheck:
         $ _err = atb_advance()
         $ atb_selfcheck_note("advance_err=%r scene=%s sprite=%s" % (_err, scene_id, sprite_id))
     $ atb_selfcheck_note("chat_log=%d" % len(chat_log))
+    $ atb_render_scene(transition=False)
     $ _res = renpy.call_screen("chat_ui")
     $ atb_selfcheck_note("screen_ok res=%r" % (_res,))
     $ _demo_ending = {"id": "romance", "title": "测试结局", "subtitle": "SELF CHECK",

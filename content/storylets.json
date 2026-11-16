@@ -66,7 +66,7 @@
           ]}
         ]
       },
-      "opening_cue": "「陈屿刚才问你有没有跟他说什么。」她把「什么」两个字咬得很轻，「我说没有。」",
+      "opening_cue": "她提起陈屿刚才过来问过话，语气很轻，像在试探你知道多少。",
       "narrative_hint": "陈屿只提供有限视角：他知道她在考虑分班、也知道她在躲玩家，但不知道误会本身。别让这条线替玩家解谜。",
       "possible_outcomes": ["hint_received", "suspicion_raised", "topic_dropped"],
       "once": true,
@@ -88,7 +88,7 @@
           {"gte": ["relationship.trust", 38]}
         ]
       },
-      "opening_cue": "她停了很久，才说：「你那天说的那句话，我在旁边听到了。」",
+      "opening_cue": "她停了很久，忽然提起那天她其实就在旁边，听见了那句话。",
       "narrative_hint": "把误解摆上桌。结果不预设：可以澄清、可以只解开一半、也可以谈得更僵。她不会因为一句解释就立刻完全相信。",
       "possible_outcomes": ["clarified", "partially_clarified", "worse"],
       "once": true,
@@ -112,7 +112,7 @@
           ]}
         ]
       },
-      "opening_cue": "桌角那张对折的纸被她按住：「这个，你先别看了。」",
+      "opening_cue": "桌角那张对折的纸被她按住，她没有收起来，也没有打开。",
       "narrative_hint": "谈分班与之后怎么相处。她会说清这是自己的决定；玩家可以支持、可以不安，但不能替她决定。",
       "possible_outcomes": ["discussed_respectfully", "conflict_emerged", "topic_avoided"],
       "once": true,
@@ -135,7 +135,7 @@
           {"flag": ["facts.walk_home_done", false]}
         ]
       },
-      "opening_cue": "她把书包带往上提了提，站在校门口的路灯下没动：「你往哪边走？」",
+      "opening_cue": "她把书包带往上提了提，站在校门口的路灯下没动，像在等你先开口。",
       "narrative_hint": "创造一段自然的并肩路。玩家可以拒绝同行，事件不强制成功。",
       "possible_outcomes": ["walked_together", "walked_apart", "declined"],
       "once": true,
