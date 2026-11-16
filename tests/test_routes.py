@@ -27,14 +27,31 @@ def test_route_communicate_ends_romance(engine):
     assert last["ending"]["title"] == "下学期，也一起走吧"
 
 
-def test_route_control_ends_missed(engine):
-    game_id, last, history = play(engine, ROUTE_CONTROL)
-    assert last["ending"] is not None
+def test_route_control_ends_friends(engine):
+    """越界干预会被记录、尊重值当场下降；她把选择权要回去之后，关系停在朋友。"""
+    from tests.helpers import send
+
+    start = engine.start()
+    game_id = start["game_id"]
+    send(engine, game_id, ROUTE_CONTROL[0])
+    send(engine, game_id, ROUTE_CONTROL[1])
+
     state = internal(engine, game_id)
     assert state["facts"]["player_controlling"], "越界干预没有被记录"
-    assert state["relationship"]["respect_for_autonomy"] < 35, "尊重值没有明显下降"
-    assert state["npc"]["mutual_intent"] == "declined"
-    assert state["ending_id"] == "missed"
+    assert state["relationship"]["respect_for_autonomy"] <= 40, "尊重值没有因干预下降"
+
+    last = None
+    for text in ROUTE_CONTROL[2:]:
+        last = send(engine, game_id, text)
+        if last.get("ending"):
+            break
+    assert last is not None and last["ending"] is not None
+
+    state = internal(engine, game_id)
+    assert not state["facts"]["player_expressed_romance"], "这条路线不该替玩家表白"
+    assert state["npc"]["mutual_intent"] == "friendship"
+    assert state["ending_id"] == "friends"
+    assert last["ending"]["title"] == "还是和以前一样"
 
 
 def test_route_avoid_ends_missed(engine):

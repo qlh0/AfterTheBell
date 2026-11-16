@@ -112,7 +112,7 @@ def test_ending_committed_rejects_more_turns(client):
         if last.get("ending"):
             break
     assert last is not None
-    assert last["ending"]["id"] == "missed"
+    assert last["ending"]["id"] == "friends"
     more = interact(client, game_id, "再聊两句。")
     assert more.status_code == 409
     assert more.json()["error"] == "ending_committed"

@@ -55,6 +55,10 @@ label selfcheck:
     $ atb_selfcheck_note("chat_log=%d" % len(chat_log))
     $ _res = renpy.call_screen("chat_ui")
     $ atb_selfcheck_note("screen_ok res=%r" % (_res,))
+    $ _demo_ending = {"id": "romance", "title": "测试结局", "subtitle": "SELF CHECK",
+                      "epilogue": ["第一行测试文本。", "第二行测试文本。"], "closing_line": "——测试用结尾。"}
+    $ _ending_res = renpy.call_screen("ending_view", _demo_ending)
+    $ atb_selfcheck_note("ending_screen_ok res=%r" % (_ending_res,))
     $ selfcheck_mode = False
     $ atb_selfcheck_note("done")
     $ renpy.quit()

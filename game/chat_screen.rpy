@@ -116,6 +116,10 @@ screen backend_down(message):
 screen ending_view(ending):
     modal True
     zorder 100
+
+    if store.selfcheck_mode:
+        timer 0.8 action Return(True)
+
     add Solid("#05070bcc")
 
     frame:

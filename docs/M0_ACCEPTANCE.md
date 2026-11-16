@@ -26,7 +26,7 @@ $ .venv\Scripts\python.exe -m pytest -q
 
 覆盖：
 
-- `test_routes.py`：三条玩家脚本分别收束到 `romance` / `missed` / `missed`，且比对的是**服务端内部状态**（trust、respect、facts），不是对白；
+- `test_routes.py`：三条玩家脚本分别收束到 `romance` / `friends` / `missed`，且比对的是**服务端内部状态**（trust、respect、facts），不是对白；
 - `test_api.py`：`request_id` 重试幂等（不重复提交）、`state_version` 冲突返回 409、404、空文本 422、结束后再交互 409、`/advance` 换场景、快照 restore、响应不包含内部字段；
 - `test_rules.py`：DSL 各算子、bool 与 int 不混用、数值 0–100 截断、单回合变化上限、未知动作被丢弃、`affection=100` 也不给恋爱结局、finale 只在校门口成立。
 
@@ -50,23 +50,36 @@ $env:ATB_SELFCHECK = "1"; D:\renpy-8.6.0-sdk\renpy.exe D:\AfterTheBell
 ```text
 boot=True
 start_err=None
-game_id=demo_659c59f1
+game_id=demo_9de37084
 send_err=None turn=1 version=1
 advance_err=None scene=school_gate sprite=xuzhi_normal
 chat_log=8
 screen_ok res=('quit', None)
+ending_screen_ok res=True
 done
 ```
 
-说明：Ren'Py 侧从探活、开局、发一句话、推进时间到渲染聊天面板，全链路无异常。
+说明：Ren'Py 侧从探活、开局、发一句话、推进时间、渲染聊天面板到渲染结局卡，全链路无异常。
+
+### 一键启动
+
+`run_dev.bat` 实测：后端在 8756 就绪（`/health` 200），Ren'Py 主窗口标题为"那天放学后"并正常打开。
+
+```text
+=== health ===
+OK api=0.3.0-m0
+=== renpy window ===
+Id     MainWindowTitle
+11068  那天放学后
+```
 
 ## 3. 三路线结果（终端复现）
 
 | 路线 | 输入策略 | 结局 | 关键状态 |
 |---|---|---|---|
 | 主动沟通 | 关心 → 澄清那句话 → 支持她自己选 → 表达心意 | `romance`《下学期，也一起走吧》 | `misunderstanding_resolved=true`、`class_change_discussed=true`、`mutual_intent=romance`，约 8–10 回合收束 |
-| 过度干预 | "你不许去重点班""我替你决定" | `missed`《那天没说出口的话》 | `player_controlling=true`、`respect_for_autonomy<35`、`mutual_intent=declined` |
-| 持续回避 | 只回"嗯/哦/哈哈" | `missed` | 误会从未进入讨论，平静收场 |
+| 过度干预后补救 | "你不许去重点班""我替你决定" → 道歉、澄清、把选择权还给她 | `friends`《还是和以前一样》 | 干预时 `player_controlling=true`、尊重值当场下降；补救后 `mutual_intent=friendship`，没有替玩家表白 |
+| 持续回避 | 只回"嗯/哦/哈哈" | `missed`《那天没说出口的话》 | 误会从未进入讨论，平静收场 |
 
 复现命令：
 
