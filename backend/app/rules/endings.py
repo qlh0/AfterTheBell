@@ -72,6 +72,10 @@ def decide_mutual_intent(state: dict[str, Any]) -> str:
     """她自己的答复：由规则根据已提交的事实决定，不由模型说了算。"""
     rel = state["relationship"]
     facts = state["facts"]
+    if facts.get("player_declined_romance") or facts.get("player_chose_friends"):
+        if rel["respect_for_autonomy"] < 30 or rel["trust"] < 30:
+            return "declined"
+        return "friendship"
     if facts["player_expressed_romance"]:
         if _romance_ready(state):
             return "romance"
@@ -137,6 +141,8 @@ def resolve(state: dict[str, Any], content: Any) -> EndingResolution:
 
     failed: list[str] = []
     for goal_id, status in list(state["narrative_goals"].items()):
+        if status == "skipped":
+            continue
         if status != "done":
             state["narrative_goals"][goal_id] = "failed"
             failed.append(goal_id)

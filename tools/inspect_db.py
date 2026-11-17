@@ -53,11 +53,12 @@ def main() -> None:
     print(f"\n=== 对局 {game_id} ===")
     state = json.loads(conn.execute(
         "SELECT state_json FROM games WHERE game_id=?", (game_id,)).fetchone()["state_json"])
-    print(f"场景={state['scene']}  结局阶段={state['ending_phase']}  结局={state['ending_id']}")
+    print(f"分支={state.get('branch_id', 'main')}  场景={state['scene']}  结局阶段={state['ending_phase']}  结局={state['ending_id']}")
     print(f"关系={state['relationship']}")
     print("已成立的事实：" + (", ".join(k for k, v in state["facts"].items() if v) or "无"))
     print(f"目标状态={state['narrative_goals']}")
     print(f"用过的事件={state['used_storylets']}")
+    print("线索=" + str([(t.get("id"), t.get("status")) for t in state.get("open_threads", [])]))
 
     print("\n各表在本局的行数：")
     for table in ("state_snapshots", "requests", "turns", "events", "memories", "llm_calls"):

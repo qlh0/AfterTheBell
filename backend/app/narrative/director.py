@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from .. import game_state as gs
+from ..rules.threads import thread_for_goal
 from .storylets import Storylet, StoryletLibrary
 
 # 越晚越该收束的目标
@@ -45,7 +46,19 @@ def score(state: dict[str, Any], storylet: Storylet) -> int:
     """确定性评分：只用于 M0 / 兜底。分数可解释、可复核。"""
     s = storylet.priority
     goal_status = state["narrative_goals"].get(storylet.narrative_goal, "pending")
-    s += {"pending": 6, "in_progress": 10, "done": -60, "failed": -60}.get(goal_status, 0)
+    s += {"pending": 6, "in_progress": 10, "done": -60, "failed": -60, "skipped": 0}.get(goal_status, 0)
+
+    # v0.3：优先回应与当前目标相关、长期悬而未决的线索
+    thread_id = thread_for_goal(storylet.narrative_goal)
+    if thread_id:
+        for thread in state.get("open_threads", []):
+            if thread.get("id") != thread_id:
+                continue
+            if thread.get("status") == "open":
+                s += 8
+            elif thread.get("status") in ("partially_clarified", "discussed", "worsened", "conflicted"):
+                s += 4
+            break
 
     if storylet.id == "school_gate_finale":
         s += 60

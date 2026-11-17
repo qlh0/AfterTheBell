@@ -21,6 +21,7 @@ from .. import game_state as gs
 from ..content import Content, load_content
 from ..db import Database
 from ..memory import store as memory_store
+from ..rules import threads as thread_rules
 from . import director
 from .storylets import Storylet
 
@@ -118,6 +119,9 @@ def build_messages(
 
 【已发生的关键事实】
 """ + "\n".join(f"- {x}" for x in _facts_summary(state)) + """
+
+【未解决的线索】
+""" + "\n".join(thread_rules.prompt_lines(state)) + """
 
 【最近说过的话】
 """ + ("\n".join(recent) if recent else "- （刚刚开始）") + """

@@ -143,10 +143,65 @@
       },
       "opening_cue": "她把书包带往上提了提，站在校门口的路灯下没动，像在等你先开口。",
       "narrative_hint": "创造一段自然的并肩路。玩家可以拒绝同行，事件不强制成功。",
-      "possible_outcomes": ["walked_together", "walked_apart", "declined"],
+      "possible_outcomes": ["walked_and_talked", "walked_together", "walked_apart", "declined"],
       "once": true,
       "priority": 60,
       "scene_lock": "school_gate"
+    },
+    {
+      "id": "unfinished_conversation",
+      "title": "没说完的话",
+      "kind": "clarification",
+      "narrative_goal": "clarify_misunderstanding",
+      "participants": ["player", "xuzhi"],
+      "allowed_scenes": ["classroom", "school_gate"],
+      "preconditions": {
+        "all": [
+          {"eq": ["ending_phase", "none"]},
+          {"falsy": ["active_storylet"]},
+          {"gte": ["meaningful_turns", 5]},
+          {"any": [
+            {"all": [
+              {"flag": ["facts.misunderstanding_discussed", true]},
+              {"flag": ["facts.misunderstanding_resolved", false]}
+            ]},
+            {"flag": ["facts.player_controlling", true]}
+          ]}
+        ]
+      },
+      "opening_cue": "她握着手机，屏幕亮了又暗，像有话憋了很久。",
+      "exposition": ["你们之间还有话没说完——她能感觉到，你也能。"],
+      "narrative_hint": "让她主动表达感受；可以修复，也可以谈僵。一句解释不能直接等于和好。",
+      "possible_outcomes": ["repaired", "partially_understood", "worsened", "avoided"],
+      "once": true,
+      "priority": 58,
+      "scene_lock": null
+    },
+    {
+      "id": "shared_memory",
+      "title": "你还记得吗",
+      "kind": "daily_memory",
+      "narrative_goal": "repair_or_deepen_trust",
+      "participants": ["player", "xuzhi"],
+      "allowed_scenes": ["classroom", "school_gate"],
+      "preconditions": {
+        "all": [
+          {"eq": ["ending_phase", "none"]},
+          {"falsy": ["active_storylet"]},
+          {"gte": ["meaningful_turns", 3]},
+          {"any": [
+            {"flag": ["facts.old_note_seen", true]},
+            {"flag": ["facts.walk_home_done", true]}
+          ]}
+        ]
+      },
+      "opening_cue": "她忽然提起以前的一件小事，语气很轻，像在确认你还记不记得。",
+      "exposition": ["她说的那件事，你们确实一起经历过。"],
+      "narrative_hint": "用真实的共同记忆做情感铺垫，不凭空发明过去，也不靠突然告白推进。",
+      "possible_outcomes": ["shared_warmth", "different_understanding", "memory_avoided"],
+      "once": true,
+      "priority": 44,
+      "scene_lock": null
     },
     {
       "id": "school_gate_finale",

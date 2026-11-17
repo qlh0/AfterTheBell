@@ -61,6 +61,18 @@ def suggestions(
                 _item("note", "接住旧事", "那张便签你还留着啊。"),
                 _item("care", "关心她", "你最近是不是遇到什么事了？"),
             ]
+        elif sid == "shared_memory":
+            items += [
+                _item("remember", "接住回忆", "我记得那次。你当时还笑我。"),
+                _item("own_version", "说说你记得的", "我印象里的版本好像跟你不太一样。"),
+                _item("care", "关心她", "你怎么突然想起这个了？"),
+            ]
+        elif sid == "unfinished_conversation":
+            items += [
+                _item("feelings", "说出感受", "我不想再这样各想各的了，我们能不能说开？"),
+                _item("apology", "道歉", "刚才是我不好，我不该那样说。"),
+                _item("listen", "先听她说", "你先说，我听着。"),
+            ]
         elif sid == "school_gate_finale":
             items += [
                 _item("confess", "说出心意", "我喜欢你，不管下学期分不分班。"),

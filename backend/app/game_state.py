@@ -18,7 +18,7 @@ EMOTIONS = ("guarded", "normal", "relieved", "happy", "hurt", "sad", "annoyed", 
 MUTUAL_INTENTS = ("unknown", "romance", "friendship", "declined")
 PHASES = ("none", "eligible", "prepared", "committed")
 
-GOAL_STATUSES = ("pending", "in_progress", "done", "failed")
+GOAL_STATUSES = ("skipped", "pending", "in_progress", "done", "failed")
 
 RELATIONSHIP_FIELDS = ("affection", "trust", "respect_for_autonomy")
 RELATIONSHIP_MIN = 0

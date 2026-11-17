@@ -204,6 +204,8 @@ def evaluate(
 
     if sid == "walk_home":
         if ev.get("player_accepted"):
+            if analysis.topics & {"romance", "misunderstanding", "class_change", "distance"}:
+                return Progress("walked_and_talked", "玩家接受同行，而且真的聊到了两个人的事")
             return Progress("walked_together", "玩家明确接受同行")
         if ev.get("player_declined"):
             return Progress("walked_apart", "玩家拒绝或先走了")
@@ -234,7 +236,7 @@ def evaluate(
     if sid == "school_gate_finale":
         if ev.get("player_stance") or (ev.get("relationship_talk") and turns >= 1):
             return Progress("finale_ready", "双方已经表态或有明确的关系话题")
-        if turns >= 1:
+        if turns >= 2:
             return Progress("finale_ready", "该说的已经说得差不多了")
         return Progress(None, "还差最后一句")
 
@@ -249,3 +251,105 @@ def should_abandon(state: dict[str, Any], storylet: Storylet) -> tuple[bool, str
     if _turns(state) >= MAX_TURNS.get(storylet.id, 3):
         return True, "超过最大互动轮数仍未产生结果"
     return False, ""
+
+
+def allowed_outcomes(
+    state: dict[str, Any], storylet: Storylet, analysis: Analysis
+) -> set[str]:
+    """当前证据能支撑的结果集合。
+
+    LLM 可以在这些结果里选一个（提供语气/走向的灵活性），但不能越过证据边界；
+    集合为空表示证据不足，必须继续 pending。
+    """
+    ev = state.get("storylet_evidence", {})
+    rel = state["relationship"]
+    turns = _turns(state)
+    sid = storylet.id
+
+    if sid == "late_explanation":
+        if ev.get("pressure"):
+            return {"worse"}
+        if ev.get("explanation_offered") and ev.get("quote_discussed"):
+            if rel["trust"] >= 42 and rel["respect_for_autonomy"] >= 40:
+                # 证据已经足够支撑「澄清」，不允许模型把它降级成「只说开一半」
+                return {"clarified"}
+            return {"partially_clarified"}
+        if ev.get("quote_discussed") and turns >= 1:
+            return {"partially_clarified"}
+        if turns >= 2:
+            return {"partially_clarified"}
+        return set()
+
+    if sid == "class_choice":
+        if ev.get("pressure"):
+            return {"conflict_emerged"}
+        if ev.get("future_talk") and (ev.get("class_plan") or ev.get("respectful")):
+            return {"discussed_respectfully"}
+        if turns >= 2:
+            return {"topic_avoided"}
+        return set()
+
+    if sid == "walk_home":
+        if ev.get("player_accepted"):
+            if analysis.topics & {"romance", "misunderstanding", "class_change", "distance"}:
+                return {"walked_and_talked", "walked_together"}
+            return {"walked_together"}
+        if ev.get("player_declined"):
+            return {"walked_apart", "declined"}
+        if turns >= 1:
+            return {"walked_apart"}
+        return set()
+
+    if sid == "old_note":
+        if ev.get("cold"):
+            return {"distance_kept"}
+        if ev.get("engaged"):
+            return {"nostalgia_shared"}
+        if turns >= 1:
+            return {"topic_avoided"}
+        return set()
+
+    if sid == "direct_question":
+        if ev.get("distance_talk"):
+            return {"admitted_distance"}
+        if ev.get("partial_talk"):
+            return {"partial_truth"}
+        if turns >= 1:
+            return {"deflected"}
+        return set()
+
+    if sid == "chenyu_hint":
+        if ev.get("chenyu_talk"):
+            return {"hint_received"}
+        if ev.get("distance_talk"):
+            return {"topic_dropped"}
+        if turns >= 1:
+            return {"suspicion_raised"}
+        return set()
+
+    if sid == "shared_memory":
+        if ev.get("different"):
+            return {"different_understanding"}
+        if ev.get("engaged"):
+            return {"shared_warmth"}
+        if turns >= 1:
+            return {"memory_avoided"}
+        return set()
+
+    if sid == "unfinished_conversation":
+        if ev.get("pressure"):
+            return {"worsened"}
+        if (ev.get("explanation") or ev.get("apology")) and ev.get("feelings"):
+            return {"repaired", "partially_understood"}
+        if ev.get("feelings"):
+            return {"partially_understood"}
+        if turns >= 2:
+            return {"avoided"}
+        return set()
+
+    if sid == "school_gate_finale":
+        if ev.get("player_stance") or (ev.get("relationship_talk") and turns >= 1) or turns >= 2:
+            return {"finale_ready"}
+        return set()
+
+    return set()

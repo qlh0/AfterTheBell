@@ -124,38 +124,3 @@ def commit_actions(
     changes = gs.apply_relationship_delta(state, capped, reason or "dialogue")
     changes += gs.apply_fact_changes(state, facts, reason or "dialogue")
     return changes, notes
-
-
-def record_goal_progress(state: dict[str, Any]) -> list[dict[str, Any]]:
-    """根据事实推进叙事目标状态（只前进，不回退；failed 由结局阶段单独处理）。"""
-    goals = state["narrative_goals"]
-    facts = state["facts"]
-    changes: list[dict[str, Any]] = []
-
-    def advance(goal_id: str, status: str) -> None:
-        if goal_id not in goals:
-            return
-        order = {"pending": 0, "in_progress": 1, "done": 2, "failed": 3}
-        if order[status] <= order[goals[goal_id]]:
-            return
-        before = goals[goal_id]
-        goals[goal_id] = status
-        changes.append({
-            "path": f"narrative_goals.{goal_id}",
-            "before": before,
-            "after": status,
-            "reason": "goal_progress",
-        })
-
-    if facts["distance_noticed"] or facts["player_asked_distance"]:
-        advance("notice_distance", "done")
-    if facts["misunderstanding_resolved"]:
-        advance("clarify_misunderstanding", "done")
-    elif facts["misunderstanding_discussed"]:
-        advance("clarify_misunderstanding", "in_progress")
-    if facts["class_change_discussed"]:
-        advance("discuss_class_change", "done")
-    if facts["finale_resolved"]:
-        advance("define_relationship", "done")
-
-    return changes

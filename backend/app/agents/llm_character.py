@@ -23,6 +23,7 @@ from ..memory import store as memory_store
 from ..narrative.storylets import Storylet
 from ..rules.actions import ACTIONS
 from ..rules.meaningful_turn import MODEL_ADDABLE, Analysis
+from ..rules import npc_intents
 from . import mock_character, prompts
 from .mock_character import AgentReply
 
@@ -149,6 +150,10 @@ def _validate(
     if parsed.get("storylet_outcome") and outcome is None:
         notes.append("outcome_not_allowed")
 
+    npc_intent, npc_why = npc_intents.parse(state, parsed.get("npc_intent"))
+    if parsed.get("npc_intent") and npc_intent is None:
+        notes.append("npc_intent_rejected:" + npc_why)
+
     return AgentReply(
         dialogue=dialogue,
         emotion=emotion,
@@ -156,6 +161,7 @@ def _validate(
         storylet_outcome=outcome,
         source="llm",
         notes=notes,
+        npc_intent=npc_intent,
     )
 
 

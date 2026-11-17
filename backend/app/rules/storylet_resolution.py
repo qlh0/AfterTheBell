@@ -118,6 +118,12 @@ OUTCOMES: dict[str, dict[str, dict[str, Any]]] = {
         },
     },
     "walk_home": {
+        "walked_and_talked": {
+            "rel": {"trust": 4, "affection": 4},
+            "facts": ["walk_home_done"],
+            "narr": ["你们并肩走了一段，聊到了分班、也聊到了以后。", "路灯一盏一盏亮起来，她的步子比平时慢。"],
+            "mem": ("episode", "两人一起走了一段，也第一次认真聊了以后。", 5, ["walk_home"]),
+        },
         "walked_together": {
             "rel": {"trust": 3, "affection": 3},
             "facts": ["walk_home_done"],

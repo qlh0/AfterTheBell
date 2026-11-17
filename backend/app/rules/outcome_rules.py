@@ -34,7 +34,11 @@ def default_outcome(storylet: Storylet, analysis: Analysis) -> str:
         return "topic_avoided"
 
     if storylet.id == "walk_home":
-        return "walked_apart" if "leave" in analysis.topics else "walked_together"
+        if "leave" in analysis.topics and not (analysis.topics & {"romance", "misunderstanding", "class_change"}):
+            return "walked_apart"
+        if analysis.topics & {"romance", "misunderstanding", "class_change", "distance"}:
+            return "walked_and_talked"
+        return "walked_together"
 
     if storylet.id == "old_note":
         if analysis.controlling:

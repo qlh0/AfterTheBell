@@ -22,7 +22,7 @@ def interact(client, game_id: str, text: str, request_id: str | None = None, ver
 def test_health(client):
     data = client.get("/health").json()
     assert data["ok"] is True
-    assert data["storylets"] == 7
+    assert data["storylets"] == 9
     assert data["llm_mode"] == "mock"
 
 

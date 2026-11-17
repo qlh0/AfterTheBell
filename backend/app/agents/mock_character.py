@@ -27,6 +27,7 @@ class AgentReply:
     storylet_outcome: str | None = None
     source: str = "mock"
     beat: str | None = None  # 可选的舞台提示（先于对白显示）
+    npc_intent: str | None = None  # 她主动想做的事（白名单见 rules/npc_intents.py）
     # LLM 指标（mock 路径保持 0）
     model: str = ""
     latency_ms: int = 0
@@ -153,7 +154,35 @@ STORYLET_LINES: dict[str, dict[str, list[str]]] = {
             "「这个啊……」她把纸往书里一夹，「以后再说吧。」",
         ],
     },
+    "shared_memory": {
+        "shared_warmth": [
+            "「你还记得啊。」她笑了一下，「我还以为只有我一个人记着。」",
+        ],
+        "different_understanding": [
+            "「原来你记得的是这个版本。」她挑了挑眉，「跟我记的差挺多。」",
+        ],
+        "memory_avoided": [
+            "「算了，也没什么事。」她把话收了回去。",
+        ],
+    },
+    "unfinished_conversation": {
+        "repaired": [
+            "「……嗯。」她把手放下来，「那就说到这儿，别再各想各的了。」",
+        ],
+        "partially_understood": [
+            "「我知道你的意思了。」她顿了顿，「但我还得再想想。」",
+        ],
+        "worsened": [
+            "「你现在说这些，有什么用。」她把脸别开。",
+        ],
+        "avoided": [
+            "「今天先这样吧。」她低头收拾书包。",
+        ],
+    },
     "walk_home": {
+        "walked_and_talked": [
+            "「那说好了。」她把书包带往上提了提，「分班以后也常联系。」",
+        ],
         "walked_together": [
             "「顺路。」她先往前走了两步，又放慢了一点。",
             "「走快点啦。」她回头催你，语气跟以前一样。",

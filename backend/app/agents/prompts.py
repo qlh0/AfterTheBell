@@ -16,6 +16,7 @@ from ..content import Content
 from ..narrative.storylets import Storylet
 from ..rules.actions import ACTIONS
 from ..rules.meaningful_turn import Analysis
+from ..rules.npc_intents import prompt_lines as npc_intent_lines
 
 _SYSTEM_FILE = PROMPTS_DIR / "character_system.txt"
 
@@ -222,12 +223,15 @@ def user_prompt(
         "",
         "【输出】只输出一个 JSON 对象：",
         '{"dialogue": "你这一句台词", "emotion": "guarded|normal|relieved|happy|hurt|sad|annoyed|soft", '
-        '"actions": ["从上面选的 id"], "storylet_outcome": null}',
+        '"actions": ["从上面选的 id"], "storylet_outcome": null, "npc_intent": null}',
         "storylet_outcome 只有在「现在正在发生的事件」存在时，才从可能的走向里选一个，否则填 null。",
         "",
+        "【npc_intent：你想主动做什么】（可选，不要每轮都填）",
+        *npc_intent_lines(),
+        "- 只有当你真的想主动推进时才填；否则 null。主动开口不代表玩家会答应，也不能直接算事件完成。",
+        "",
         "【硬性要求】",
-        "- 台词 1–3 句，尽量短，符合 17 岁高中生口语；不要一段长篇独白。",
-        "- **先接住玩家刚说的这句话**（哪怕只是应一声、反问一句、把话题挡回去），再让当前事件的情境自然发生；"
+        "- 台词 1–3 句，尽量短，符合 17 岁高中生口语；不要一段长篇独白。",        "- **先接住玩家刚说的这句话**（哪怕只是应一声、反问一句、把话题挡回去），再让当前事件的情境自然发生；"
         "不要为了演事件而无视玩家。",
         "- 可以回避、嘴硬、转移话题；但**不讽刺、不贬低、不赶人**。嘴硬是保护色，不是伤人。",
         "- 每句台词必须给玩家留一个「能接的话头」：一个问题、一个没说完的动作、一个可追问的细节，"

@@ -11,6 +11,7 @@
           {"flag": ["facts.misunderstanding_resolved", true]},
           {"flag": ["facts.class_change_discussed", true]},
           {"flag": ["facts.player_expressed_romance", true]},
+          {"flag": ["facts.player_declined_romance", false]},
           {"eq": ["npc.mutual_intent", "romance"]},
           {"gte": ["relationship.trust", 60]},
           {"gte": ["relationship.respect_for_autonomy", 55]},
@@ -33,7 +34,12 @@
       "gates": {
         "all": [
           {"flag": ["facts.misunderstanding_discussed", true]},
+          {"any": [
+            {"flag": ["facts.player_declined_romance", false]},
+            {"flag": ["facts.player_chose_friends", true]}
+          ]},
           {"gte": ["relationship.trust", 40]},
+          {"gte": ["relationship.respect_for_autonomy", 30]},
           {"ne": ["npc.mutual_intent", "declined"]}
         ]
       },

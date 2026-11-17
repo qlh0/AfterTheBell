@@ -20,9 +20,12 @@ from .db import Database, new_game_id
 from .memory import store as memory_store
 from .narrative import director_llm, scheduler
 from .rules import actions as action_rules
+from .rules import goals as goal_rules
 from .rules import endings as ending_rules
 from .rules import meaningful_turn, storylet_resolution, suggestions as suggestion_rules
+from .rules import npc_intents
 from .rules import storylet_progress as progress_rules
+from .rules import threads as thread_rules
 
 OPENING_NARRATION = [
     "放学铃响过二十分钟，教室里只剩下你们两个。这一周她回消息一直很慢，放学也总是先走——你还没找到机会问她。",
@@ -59,6 +62,7 @@ class Engine:
     def start(self) -> dict[str, Any]:
         game_id = new_game_id()
         state = gs.default_state(game_id, self.content.goal_ids(), self.content.budget())
+        thread_rules.sync(state)
         state["npc"]["current_emotion"] = gs.derive_emotion(state)
         self.db.create_game(state)
         branch = state["branch_id"]
@@ -152,6 +156,11 @@ class Engine:
             notes.extend(reply.notes)
         changes.extend(action_changes)
 
+        # 4.5 她的主动意图：只排期、不结算；上下文不成立就忽略
+        npc_event = self._maybe_npc_initiative(state, reply)
+        if npc_event is not None:
+            events.append(npc_event)
+
         # 5. 事件推进：证据足够才结算；否则等待 / 超时放弃（绝不默认成功）
         ending_block: dict[str, Any] | None = None
         resolved_id: str | None = None
@@ -194,7 +203,9 @@ class Engine:
             else:
                 ev = progress_rules.evaluate(state, active, analysis)
                 if ev.outcome and active.id not in resolved_set:
-                    resolution = storylet_resolution.resolve(state, active, analysis, ev.outcome)
+                    allowed = progress_rules.allowed_outcomes(state, active, analysis)
+                    chosen = reply.storylet_outcome if reply.storylet_outcome in allowed else ev.outcome
+                    resolution = storylet_resolution.resolve(state, active, analysis, chosen)
                     if resolution is not None:
                         changes.extend(resolution.changes)
                         narration.extend(resolution.narration)
@@ -264,7 +275,7 @@ class Engine:
                            "payload": {"to": "school_gate"}})
 
         # 8. 目标与结局资格
-        changes.extend(action_rules.record_goal_progress(state))
+        changes.extend(goal_rules.record_goal_progress(state, self.content))
         if ending_rules.maybe_make_eligible(state):
             changes.append({
                 "path": "ending_phase",
@@ -325,6 +336,9 @@ class Engine:
                 "status": "committed",
                 "payload": {"reason": "hard_end_without_finale", "ending": state["ending_id"]},
             })
+
+        # 9.6 线索状态与事实对齐（幂等；读档分支自带快照）
+        changes.extend(thread_rules.sync(state))
 
         # 10. 收尾：情绪 → 版本 → 乐观并发提交 → 日志
         emotion = reply.emotion if reply.emotion in gs.EMOTIONS else gs.derive_emotion(state)
@@ -425,7 +439,8 @@ class Engine:
                         },
                     })
 
-        changes.extend(action_rules.record_goal_progress(state))
+        changes.extend(goal_rules.record_goal_progress(state, self.content))
+        changes.extend(thread_rules.sync(state))
         if ending_rules.maybe_make_eligible(state):
             changes.append({"path": "ending_phase", "before": "none", "after": "eligible",
                             "reason": "finale_reachable"})
@@ -551,6 +566,37 @@ class Engine:
                 "branch_id": new_branch, "state": self._public_state(snapshot)}
 
     # ---------------- 内部 ----------------
+
+    def _maybe_npc_initiative(self, state: dict[str, Any], reply: AgentReply) -> dict[str, Any] | None:
+        """把她的主动意图变成「排期」，不直接提交任何事实。"""
+        intent = getattr(reply, "npc_intent", None)
+        if not intent or not config.STORYLETS_ENABLED:
+            return None
+        if state["active_storylet"] or state["scheduled_storylet"]:
+            return None
+        if state["ending_phase"] in ("prepared", "committed"):
+            return None
+        if int(state["turn_index"]) - int(state.get("last_npc_intent_turn", -10)) < 2:
+            return None
+        ok, _why = npc_intents.validate(state, intent)
+        if not ok:
+            return None
+
+        state["last_npc_intent_turn"] = state["turn_index"]
+        state["npc"]["last_intent"] = intent
+        sid = npc_intents.storylet_for(intent)
+        if sid and self.content.storylets.is_still_eligible(sid, state):
+            state["scheduled_storylet"] = sid
+            state["scheduled_at_version"] = state["state_version"]
+            state["last_plan_turn"] = state["turn_index"]
+            return {
+                "event_id": sid,
+                "kind": "npc",
+                "status": "scheduled",
+                "payload": {"intent": intent, "why": npc_intents.INTENTS[intent]["why"]},
+            }
+        return {"event_id": "npc_intent", "kind": "npc", "status": "noted",
+                "payload": {"intent": intent}}
 
     def _record_llm(self, game_id: str, reply: AgentReply, branch_id: str = "main") -> None:
         """把这次角色调用的指标落库；mock 路径没有 model，直接跳过。"""

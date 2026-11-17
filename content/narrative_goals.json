@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "goals": {
     "notice_distance": {
       "id": "notice_distance",
@@ -7,6 +7,14 @@
       "weight": 40,
       "description": "让玩家注意到许栀最近的疏远，并作出有效反应（追问、试探、沉默观察都算）。",
       "completion_evidence": "玩家对疏远作出有效回应，或许栀在本章明确提到自己在躲。",
+      "progress_if": {"any": [
+        {"flag": ["facts.player_asked_distance", true]},
+        {"flag": ["facts.distance_noticed", true]}
+      ]},
+      "done_if": {"any": [
+        {"flag": ["facts.player_asked_distance", true]},
+        {"flag": ["facts.distance_noticed", true]}
+      ]},
       "done_when": ["flag:facts.distance_noticed", "flag:facts.player_asked_distance"],
       "soft_deadline_turn": 4
     },
@@ -16,6 +24,8 @@
       "weight": 60,
       "description": "让『那句话』被摆到台面上。可以澄清、也可以谈崩，不预设必须和解。",
       "completion_evidence": "双方对那句话的含义有过明确交流；允许以未解决状态收束。",
+      "progress_if": {"flag": ["facts.misunderstanding_discussed", true]},
+      "done_if": {"flag": ["facts.misunderstanding_resolved", true]},
       "done_when": ["flag:facts.misunderstanding_discussed", "flag:facts.misunderstanding_resolved"],
       "soft_deadline_turn": 8
     },
@@ -25,8 +35,29 @@
       "weight": 55,
       "description": "让分班从『一个消息』变成『两个人要面对的事』，重点是她自己的选择被尊重。",
       "completion_evidence": "双方谈过分班计划以及之后怎么相处，而不只是听到『分班』两个字。",
+      "progress_if": {"flag": ["facts.class_change_discussed", true]},
+      "done_if": {"flag": ["facts.class_change_discussed", true]},
       "done_when": ["flag:facts.class_change_discussed"],
       "soft_deadline_turn": 9
+    },
+    "repair_or_deepen_trust": {
+      "id": "repair_or_deepen_trust",
+      "label": "修复或加深信任",
+      "weight": 30,
+      "optional": true,
+      "description": "仅当两人出现矛盾、或信任明显下滑时激活；关系顺利时直接跳过，不作为必经目标。",
+      "completion_evidence": "信任与尊重回到可以继续相处的位置。",
+      "activate_if": {"any": [
+        {"flag": ["facts.player_controlling", true]},
+        {"lt": ["relationship.trust", 45]}
+      ]},
+      "progress_if": {"gte": ["relationship.trust", 50]},
+      "done_if": {"all": [
+        {"gte": ["relationship.trust", 55]},
+        {"gte": ["relationship.respect_for_autonomy", 50]}
+      ]},
+      "done_when": [],
+      "soft_deadline_turn": 10
     },
     "define_relationship": {
       "id": "define_relationship",
@@ -34,6 +65,8 @@
       "weight": 100,
       "description": "在离校前给出一次真正的选择：告白、做朋友、或暂时各自走。",
       "completion_evidence": "双方意愿已表达，当前章节可合理结束。",
+      "progress_if": {"flag": ["facts.finale_resolved", true]},
+      "done_if": {"flag": ["facts.finale_resolved", true]},
       "done_when": ["flag:facts.finale_resolved"],
       "soft_deadline_turn": 12
     }

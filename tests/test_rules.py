@@ -54,13 +54,14 @@ def test_invalid_predicate_is_rejected():
 
 
 def test_storylet_content_is_valid(content):
-    # 内容加载时已经过 validate；这里再确认事件数与目标数
-    assert len(content.storylets) == 7
+    # 内容加载时已经过 validate；7 个原有事件 + 2 个新增事件
+    assert len(content.storylets) == 9
     ids = {s.id for s in content.storylets.all()}
     assert {"old_note", "direct_question", "chenyu_hint", "late_explanation",
-            "class_choice", "walk_home", "school_gate_finale"} <= ids
-    assert set(content.goals) == {"notice_distance", "clarify_misunderstanding",
-                                  "discuss_class_change", "define_relationship"}
+            "class_choice", "walk_home", "school_gate_finale",
+            "unfinished_conversation", "shared_memory"} <= ids
+    assert {"notice_distance", "clarify_misunderstanding", "discuss_class_change",
+            "define_relationship", "repair_or_deepen_trust"} <= set(content.goals)
 
 
 # ---------------- 回合判定 ----------------
