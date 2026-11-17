@@ -27,6 +27,7 @@ from . import game_state as gs
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS games (
     game_id        TEXT PRIMARY KEY,
+    branch_id      TEXT NOT NULL DEFAULT 'main',
     state_version  INTEGER NOT NULL,
     state_json     TEXT NOT NULL,
     created_at     TEXT NOT NULL,
@@ -35,6 +36,7 @@ CREATE TABLE IF NOT EXISTS games (
 
 CREATE TABLE IF NOT EXISTS state_snapshots (
     game_id     TEXT NOT NULL,
+    branch_id   TEXT NOT NULL DEFAULT 'main',
     version     INTEGER NOT NULL,
     state_json  TEXT NOT NULL,
     created_at  TEXT NOT NULL,
@@ -43,16 +45,18 @@ CREATE TABLE IF NOT EXISTS state_snapshots (
 
 CREATE TABLE IF NOT EXISTS requests (
     game_id     TEXT NOT NULL,
+    branch_id   TEXT NOT NULL DEFAULT 'main',
     request_id  TEXT NOT NULL,
     endpoint    TEXT NOT NULL,
     response_json TEXT NOT NULL,
     created_at  TEXT NOT NULL,
-    PRIMARY KEY (game_id, request_id)
+    PRIMARY KEY (game_id, branch_id, request_id)
 );
 
 CREATE TABLE IF NOT EXISTS turns (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     game_id     TEXT NOT NULL,
+    branch_id   TEXT NOT NULL DEFAULT 'main',
     turn_index  INTEGER NOT NULL,
     role        TEXT NOT NULL,
     text        TEXT NOT NULL,
@@ -64,6 +68,7 @@ CREATE INDEX IF NOT EXISTS idx_turns_game ON turns(game_id, turn_index);
 CREATE TABLE IF NOT EXISTS events (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     game_id     TEXT NOT NULL,
+    branch_id   TEXT NOT NULL DEFAULT 'main',
     event_id    TEXT NOT NULL,
     kind        TEXT NOT NULL,
     status      TEXT NOT NULL,
@@ -76,6 +81,7 @@ CREATE INDEX IF NOT EXISTS idx_events_game ON events(game_id, id);
 CREATE TABLE IF NOT EXISTS memories (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     game_id     TEXT NOT NULL,
+    branch_id   TEXT NOT NULL DEFAULT 'main',
     kind        TEXT NOT NULL,
     content     TEXT NOT NULL,
     importance  INTEGER NOT NULL DEFAULT 3,
@@ -89,6 +95,7 @@ CREATE INDEX IF NOT EXISTS idx_memories_game ON memories(game_id, importance DES
 CREATE TABLE IF NOT EXISTS llm_calls (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     game_id     TEXT NOT NULL,
+    branch_id   TEXT NOT NULL DEFAULT 'main',
     purpose     TEXT NOT NULL,
     model       TEXT NOT NULL,
     latency_ms  INTEGER NOT NULL DEFAULT 0,
@@ -149,19 +156,52 @@ class Database:
             conn.executescript(SCHEMA)
         finally:
             conn.close()
+        self._migrate_branch()
+
+    def _migrate_branch(self) -> None:
+        """v0.3 迁移：给旧库补 branch_id；requests 主键重建为含分支。
+
+        旧数据统一归到 'main' 分支，可直接继续使用。
+        """
+        conn = self.connect()
+        try:
+            for table in ("games", "state_snapshots", "turns", "events", "memories", "llm_calls"):
+                cols = [r["name"] for r in conn.execute(f"PRAGMA table_info({table})")]
+                if "branch_id" not in cols:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN branch_id TEXT NOT NULL DEFAULT 'main'")
+            cols = [r["name"] for r in conn.execute("PRAGMA table_info(requests)")]
+            if "branch_id" not in cols:
+                conn.execute("ALTER TABLE requests RENAME TO requests_old")
+                conn.execute(
+                    "CREATE TABLE requests ("
+                    " game_id TEXT NOT NULL, branch_id TEXT NOT NULL DEFAULT 'main',"
+                    " request_id TEXT NOT NULL, endpoint TEXT NOT NULL,"
+                    " response_json TEXT NOT NULL, created_at TEXT NOT NULL,"
+                    " PRIMARY KEY (game_id, branch_id, request_id))"
+                )
+                conn.execute(
+                    "INSERT INTO requests (game_id, branch_id, request_id, endpoint, response_json, created_at)"
+                    " SELECT game_id, 'main', request_id, endpoint, response_json, created_at FROM requests_old"
+                )
+                conn.execute("DROP TABLE requests_old")
+        finally:
+            conn.close()
 
     # ---------- 游戏状态 ----------
 
     def create_game(self, state: dict[str, Any]) -> None:
         now = utcnow()
+        branch = state.get("branch_id", "main")
         with self.tx() as conn:
             conn.execute(
-                "INSERT INTO games (game_id, state_version, state_json, created_at, updated_at) VALUES (?,?,?,?,?)",
-                (state["game_id"], state["state_version"], gs.dump_state(state), now, now),
+                "INSERT INTO games (game_id, branch_id, state_version, state_json, created_at, updated_at)"
+                " VALUES (?,?,?,?,?,?)",
+                (state["game_id"], branch, state["state_version"], gs.dump_state(state), now, now),
             )
             conn.execute(
-                "INSERT INTO state_snapshots (game_id, version, state_json, created_at) VALUES (?,?,?,?)",
-                (state["game_id"], state["state_version"], gs.dump_state(state), now),
+                "INSERT INTO state_snapshots (game_id, branch_id, version, state_json, created_at)"
+                " VALUES (?,?,?,?,?)",
+                (state["game_id"], branch, state["state_version"], gs.dump_state(state), now),
             )
 
     def load_state(self, game_id: str) -> dict[str, Any] | None:
@@ -177,15 +217,17 @@ class Database:
         gs.validate_state(state)
         now = utcnow()
         payload = gs.dump_state(state)
+        branch = state.get("branch_id", "main")
         with self.tx() as conn:
             conn.execute(
-                "UPDATE games SET state_version=?, state_json=?, updated_at=? WHERE game_id=?",
-                (state["state_version"], payload, now, state["game_id"]),
+                "UPDATE games SET branch_id=?, state_version=?, state_json=?, updated_at=? WHERE game_id=?",
+                (branch, state["state_version"], payload, now, state["game_id"]),
             )
             if snapshot:
                 conn.execute(
-                    "INSERT OR REPLACE INTO state_snapshots (game_id, version, state_json, created_at) VALUES (?,?,?,?)",
-                    (state["game_id"], state["state_version"], payload, now),
+                    "INSERT OR REPLACE INTO state_snapshots (game_id, branch_id, version, state_json, created_at)"
+                    " VALUES (?,?,?,?,?)",
+                    (state["game_id"], branch, state["state_version"], payload, now),
                 )
 
     def save_state_cas(
@@ -203,24 +245,28 @@ class Database:
         gs.validate_state(state)
         now = utcnow()
         payload = gs.dump_state(state)
+        branch = state.get("branch_id", "main")
         with self.tx() as conn:
             cur = conn.execute(
-                "UPDATE games SET state_version=?, state_json=?, updated_at=?"
+                "UPDATE games SET branch_id=?, state_version=?, state_json=?, updated_at=?"
                 " WHERE game_id=? AND state_version=?",
-                (state["state_version"], payload, now, state["game_id"], expected_version),
+                (branch, state["state_version"], payload, now, state["game_id"], expected_version),
             )
             if cur.rowcount == 0:
                 return False
             conn.execute(
-                "INSERT OR REPLACE INTO state_snapshots (game_id, version, state_json, created_at) VALUES (?,?,?,?)",
-                (state["game_id"], state["state_version"], payload, now),
+                "INSERT OR REPLACE INTO state_snapshots (game_id, branch_id, version, state_json, created_at)"
+                " VALUES (?,?,?,?,?)",
+                (state["game_id"], branch, state["state_version"], payload, now),
             )
             if request_id and response_payload is not None:
                 conn.execute(
-                    "INSERT OR REPLACE INTO requests (game_id, request_id, endpoint, response_json, created_at)"
-                    " VALUES (?,?,?,?,?)",
+                    "INSERT OR REPLACE INTO requests"
+                    " (game_id, branch_id, request_id, endpoint, response_json, created_at)"
+                    " VALUES (?,?,?,?,?,?)",
                     (
                         state["game_id"],
+                        branch,
                         request_id,
                         endpoint,
                         json.dumps(response_payload, ensure_ascii=False),
@@ -236,28 +282,72 @@ class Database:
             ).fetchone()
         return gs.load_state(row["state_json"]) if row else None
 
+    def copy_branch_context(
+        self,
+        game_id: str,
+        from_branch: str,
+        to_branch: str,
+        max_turn_index: int,
+        max_state_version: int,
+    ) -> None:
+        """读档时把「过去」复制到新分支：只复制读档点之前的对话、记忆与事件。
+
+        新分支因此既有历史上下文，又看不到旧时间线的未来。
+        """
+        with self.tx() as conn:
+            conn.execute(
+                "INSERT INTO turns (game_id, branch_id, turn_index, role, text, meta_json, created_at)"
+                " SELECT game_id, ?, turn_index, role, text, meta_json, created_at FROM turns"
+                " WHERE game_id=? AND branch_id=? AND turn_index<=? ORDER BY id",
+                (to_branch, game_id, from_branch, max_turn_index),
+            )
+            conn.execute(
+                "INSERT INTO memories (game_id, branch_id, kind, content, importance, turn_index,"
+                " source_event_id, tags_json, created_at)"
+                " SELECT game_id, ?, kind, content, importance, turn_index, source_event_id,"
+                " tags_json, created_at FROM memories"
+                " WHERE game_id=? AND branch_id=? AND turn_index<=? ORDER BY id",
+                (to_branch, game_id, from_branch, max_turn_index),
+            )
+            conn.execute(
+                "INSERT INTO events (game_id, branch_id, event_id, kind, status, payload_json,"
+                " state_version, created_at)"
+                " SELECT game_id, ?, event_id, kind, status, payload_json, state_version, created_at"
+                " FROM events WHERE game_id=? AND branch_id=? AND state_version<=? ORDER BY id",
+                (to_branch, game_id, from_branch, max_state_version),
+            )
+
     def list_games(self, limit: int = 20) -> list[dict[str, Any]]:
         with self.read() as conn:
             rows = conn.execute(
-                "SELECT game_id, state_version, updated_at FROM games ORDER BY updated_at DESC LIMIT ?", (limit,)
+                "SELECT game_id, branch_id, state_version, updated_at FROM games"
+                " ORDER BY updated_at DESC LIMIT ?", (limit,)
             ).fetchall()
         return [dict(r) for r in rows]
 
     # ---------- 幂等 ----------
 
-    def get_cached_response(self, game_id: str, request_id: str) -> dict[str, Any] | None:
+    def get_cached_response(
+        self, game_id: str, request_id: str, branch_id: str = "main"
+    ) -> dict[str, Any] | None:
         with self.read() as conn:
             row = conn.execute(
-                "SELECT response_json FROM requests WHERE game_id=? AND request_id=?", (game_id, request_id)
+                "SELECT response_json FROM requests WHERE game_id=? AND branch_id=? AND request_id=?",
+                (game_id, branch_id, request_id),
             ).fetchone()
         return json.loads(row["response_json"]) if row else None
 
-    def put_cached_response(self, game_id: str, request_id: str, endpoint: str, payload: dict[str, Any]) -> None:
+    def put_cached_response(
+        self, game_id: str, request_id: str, endpoint: str, payload: dict[str, Any],
+        branch_id: str = "main",
+    ) -> None:
         with self.tx() as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO requests (game_id, request_id, endpoint, response_json, created_at)"
-                " VALUES (?,?,?,?,?)",
-                (game_id, request_id, endpoint, json.dumps(payload, ensure_ascii=False), utcnow()),
+                "INSERT OR REPLACE INTO requests"
+                " (game_id, branch_id, request_id, endpoint, response_json, created_at)"
+                " VALUES (?,?,?,?,?,?)",
+                (game_id, branch_id, request_id, endpoint,
+                 json.dumps(payload, ensure_ascii=False), utcnow()),
             )
 
     # ---------- 流水 / 事件 / 记忆 / 指标 ----------
@@ -269,18 +359,22 @@ class Database:
         role: str,
         text: str,
         meta: dict[str, Any] | None = None,
+        branch_id: str = "main",
     ) -> None:
         with self.tx() as conn:
             conn.execute(
-                "INSERT INTO turns (game_id, turn_index, role, text, meta_json, created_at) VALUES (?,?,?,?,?,?)",
-                (game_id, turn_index, role, text, json.dumps(meta or {}, ensure_ascii=False), utcnow()),
+                "INSERT INTO turns (game_id, branch_id, turn_index, role, text, meta_json, created_at)"
+                " VALUES (?,?,?,?,?,?,?)",
+                (game_id, branch_id, turn_index, role, text,
+                 json.dumps(meta or {}, ensure_ascii=False), utcnow()),
             )
 
-    def recent_turns(self, game_id: str, limit: int = 8) -> list[dict[str, Any]]:
+    def recent_turns(self, game_id: str, limit: int = 8, branch_id: str = "main") -> list[dict[str, Any]]:
         with self.read() as conn:
             rows = conn.execute(
-                "SELECT role, text, meta_json, turn_index FROM turns WHERE game_id=? ORDER BY id DESC LIMIT ?",
-                (game_id, limit),
+                "SELECT role, text, meta_json, turn_index FROM turns"
+                " WHERE game_id=? AND branch_id=? ORDER BY id DESC LIMIT ?",
+                (game_id, branch_id, limit),
             ).fetchall()
         out = [{"role": r["role"], "text": r["text"], "turn_index": r["turn_index"]} for r in rows]
         return list(reversed(out))
@@ -293,13 +387,15 @@ class Database:
         status: str,
         payload: dict[str, Any] | None = None,
         state_version: int = 0,
+        branch_id: str = "main",
     ) -> None:
         with self.tx() as conn:
             conn.execute(
-                "INSERT INTO events (game_id, event_id, kind, status, payload_json, state_version, created_at)"
-                " VALUES (?,?,?,?,?,?,?)",
+                "INSERT INTO events (game_id, branch_id, event_id, kind, status, payload_json, state_version, created_at)"
+                " VALUES (?,?,?,?,?,?,?,?)",
                 (
                     game_id,
+                    branch_id,
                     event_id,
                     kind,
                     status,
@@ -309,12 +405,12 @@ class Database:
                 ),
             )
 
-    def list_events(self, game_id: str, limit: int = 200) -> list[dict[str, Any]]:
+    def list_events(self, game_id: str, limit: int = 200, branch_id: str = "main") -> list[dict[str, Any]]:
         with self.read() as conn:
             rows = conn.execute(
                 "SELECT event_id, kind, status, payload_json, state_version, created_at FROM events"
-                " WHERE game_id=? ORDER BY id ASC LIMIT ?",
-                (game_id, limit),
+                " WHERE game_id=? AND branch_id=? ORDER BY id ASC LIMIT ?",
+                (game_id, branch_id, limit),
             ).fetchall()
         return [
             {
@@ -337,12 +433,14 @@ class Database:
         turn_index: int = 0,
         source_event_id: str | None = None,
         tags: list[str] | None = None,
+        branch_id: str = "main",
     ) -> None:
         with self.tx() as conn:
             conn.execute(
-                "INSERT INTO memories (game_id, kind, content, importance, turn_index, source_event_id, tags_json, created_at)"
-                " VALUES (?,?,?,?,?,?,?,?)",
-                (game_id, kind, content, importance, turn_index, source_event_id,
+                "INSERT INTO memories (game_id, branch_id, kind, content, importance, turn_index,"
+                " source_event_id, tags_json, created_at)"
+                " VALUES (?,?,?,?,?,?,?,?,?)",
+                (game_id, branch_id, kind, content, importance, turn_index, source_event_id,
                  json.dumps(tags or [], ensure_ascii=False), utcnow()),
             )
 
@@ -356,20 +454,25 @@ class Database:
         completion_tokens: int = 0,
         ok: bool = True,
         error: str = "",
+        branch_id: str = "main",
     ) -> None:
         with self.tx() as conn:
             conn.execute(
-                "INSERT INTO llm_calls (game_id, purpose, model, latency_ms, prompt_tokens, completion_tokens, ok, error, created_at)"
-                " VALUES (?,?,?,?,?,?,?,?,?)",
-                (game_id, purpose, model, latency_ms, prompt_tokens, completion_tokens, 1 if ok else 0, error, utcnow()),
+                "INSERT INTO llm_calls (game_id, branch_id, purpose, model, latency_ms,"
+                " prompt_tokens, completion_tokens, ok, error, created_at)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (game_id, branch_id, purpose, model, latency_ms, prompt_tokens,
+                 completion_tokens, 1 if ok else 0, error, utcnow()),
             )
 
-    def llm_metrics(self, game_id: str) -> dict[str, Any]:
+    def llm_metrics(self, game_id: str, branch_id: str | None = None) -> dict[str, Any]:
+        where = "game_id=?" + (" AND branch_id=?" if branch_id else "")
+        args = (game_id, branch_id) if branch_id else (game_id,)
         with self.read() as conn:
             row = conn.execute(
                 "SELECT COUNT(*) n, AVG(latency_ms) avg_ms, SUM(ok=0) fails,"
-                " SUM(prompt_tokens) pt, SUM(completion_tokens) ct FROM llm_calls WHERE game_id=?",
-                (game_id,),
+                f" SUM(prompt_tokens) pt, SUM(completion_tokens) ct FROM llm_calls WHERE {where}",
+                args,
             ).fetchone()
         return {
             "calls": row["n"] or 0,
@@ -379,13 +482,15 @@ class Database:
             "completion_tokens": row["ct"] or 0,
         }
 
-    def llm_stats(self, game_id: str) -> dict[str, Any]:
+    def llm_stats(self, game_id: str, branch_id: str | None = None) -> dict[str, Any]:
         """分用途的调用统计：调用数、失败数、P50/P95 延迟、token。"""
+        where = "game_id=?" + (" AND branch_id=?" if branch_id else "")
+        args = (game_id, branch_id) if branch_id else (game_id,)
         with self.read() as conn:
             rows = conn.execute(
                 "SELECT purpose, latency_ms, prompt_tokens, completion_tokens, ok, error"
-                " FROM llm_calls WHERE game_id=? ORDER BY id ASC",
-                (game_id,),
+                f" FROM llm_calls WHERE {where} ORDER BY id ASC",
+                args,
             ).fetchall()
 
         def pct(values: list[int], p: float) -> int:

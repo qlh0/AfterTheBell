@@ -60,6 +60,7 @@ EMOTION_TO_SPRITE = {
 def default_state(game_id: str, goals: list[str], budget: int = 12) -> dict[str, Any]:
     return {
         "game_id": game_id,
+        "branch_id": "main",
         "state_version": 0,
         "scene": "classroom",
         "time_slot": "after_school",

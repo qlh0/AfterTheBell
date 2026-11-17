@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from . import config
@@ -60,10 +61,12 @@ class Engine:
         state = gs.default_state(game_id, self.content.goal_ids(), self.content.budget())
         state["npc"]["current_emotion"] = gs.derive_emotion(state)
         self.db.create_game(state)
-        self.db.add_event(game_id, "game_started", "system", "committed", {"scene": state["scene"]}, 0)
+        branch = state["branch_id"]
+        self.db.add_event(game_id, "game_started", "system", "committed",
+                          {"scene": state["scene"]}, 0, branch_id=branch)
         for line in OPENING_NARRATION:
-            self.db.add_turn(game_id, 0, "narration", line)
-        self.db.add_turn(game_id, 0, "xuzhi", OPENING_LINE, {"opening": True})
+            self.db.add_turn(game_id, 0, "narration", line, branch_id=branch)
+        self.db.add_turn(game_id, 0, "xuzhi", OPENING_LINE, {"opening": True}, branch_id=branch)
         return {
             "game_id": game_id,
             "state_version": state["state_version"],
@@ -84,13 +87,13 @@ class Engine:
         request_id: str,
         expected_state_version: int | None = None,
     ) -> dict[str, Any]:
-        cached = self.db.get_cached_response(game_id, request_id)
-        if cached is not None:
-            return cached
-
         state = self.db.load_state(game_id)
         if state is None:
             raise GameNotFound(game_id)
+        branch_id = state.get("branch_id", "main")
+        cached = self.db.get_cached_response(game_id, request_id, branch_id)
+        if cached is not None:
+            return cached
         if state["ending_phase"] == "committed":
             raise EndingCommitted(state.get("ending_id"))
         if expected_state_version is not None and expected_state_version != state["state_version"]:
@@ -134,7 +137,7 @@ class Engine:
         reply = character.reply(
             state, analysis, active, expected_ending, db=self.db, game_id=game_id
         )
-        self._record_llm(game_id, reply)
+        self._record_llm(game_id, reply, branch_id)
         if getattr(reply, "beat", None):
             narration.append(reply.beat)
 
@@ -290,7 +293,7 @@ class Engine:
             )
             planning_status = plan.status
             director_choice = plan.director
-            self._record_director(game_id, director_choice)
+            self._record_director(game_id, director_choice, branch_id)
             if plan.status != "not_required":
                 events.append({
                     "event_id": plan.storylet_id or "no_event",
@@ -348,7 +351,7 @@ class Engine:
             latest = self.db.load_state(game_id) or state
             raise VersionConflict(latest.get("state_version", -1), latest)
 
-        self._persist_turn_logs(game_id, state, text, reply, analysis, narration, events, memories)
+        self._persist_turn_logs(game_id, state, text, reply, analysis, narration, events, memories, branch_id)
         return response
 
     # ---------------- 对外：推进/离场 ----------------
@@ -360,13 +363,13 @@ class Engine:
         intent: str = "continue",
         expected_state_version: int | None = None,
     ) -> dict[str, Any]:
-        cached = self.db.get_cached_response(game_id, request_id)
-        if cached is not None:
-            return cached
-
         state = self.db.load_state(game_id)
         if state is None:
             raise GameNotFound(game_id)
+        branch_id = state.get("branch_id", "main")
+        cached = self.db.get_cached_response(game_id, request_id, branch_id)
+        if cached is not None:
+            return cached
         if state["ending_phase"] == "committed":
             raise EndingCommitted(state.get("ending_id"))
         if expected_state_version is not None and expected_state_version != state["state_version"]:
@@ -407,7 +410,7 @@ class Engine:
             ) if config.STORYLETS_ENABLED else None
             if plan is not None:
                 planning_status = plan.status
-                self._record_director(game_id, plan.director)
+                self._record_director(game_id, plan.director, branch_id)
                 if plan.status != "not_required":
                     events.append({
                         "event_id": plan.storylet_id or "no_event",
@@ -451,10 +454,11 @@ class Engine:
             latest = self.db.load_state(game_id) or state
             raise VersionConflict(latest.get("state_version", -1), latest)
 
-        self.db.add_turn(game_id, state["turn_index"], "narration", "\n".join(narration) or "（你们站了一会儿。）")
+        self.db.add_turn(game_id, state["turn_index"], "narration",
+                         "\n".join(narration) or "（你们站了一会儿。）", branch_id=branch_id)
         for ev in events:
             self.db.add_event(game_id, ev["event_id"], ev["kind"], ev["status"], ev["payload"],
-                              state["state_version"])
+                              state["state_version"], branch_id=branch_id)
         return response
 
     # ---------------- 对外：读取 ----------------
@@ -465,6 +469,7 @@ class Engine:
             raise GameNotFound(game_id)
         payload = {
             "game_id": game_id,
+            "branch_id": state.get("branch_id", "main"),
             "authoritative": True,
             "state_version": state["state_version"],
         }
@@ -478,16 +483,19 @@ class Engine:
         state = self.db.load_state(game_id)
         if state is None:
             raise GameNotFound(game_id)
-        return {"game_id": game_id, "events": self.db.list_events(game_id),
-                "metrics": self.db.llm_metrics(game_id)}
+        branch = state.get("branch_id", "main")
+        return {"game_id": game_id, "branch_id": branch,
+                "events": self.db.list_events(game_id, branch_id=branch),
+                "metrics": self.db.llm_metrics(game_id, branch_id=branch)}
 
     def get_metrics(self, game_id: str) -> dict[str, Any]:
         """M3 指标面板：分用途的调用数、延迟分位、token、失败原因 + 本局进度。"""
         state = self.db.load_state(game_id)
         if state is None:
             raise GameNotFound(game_id)
-        stats = self.db.llm_stats(game_id)
+        stats = self.db.llm_stats(game_id, branch_id=state.get("branch_id", "main"))
         stats["session"] = {
+            "branch_id": state.get("branch_id", "main"),
             "scene": state["scene"],
             "turn_index": state["turn_index"],
             "meaningful_turns": state["meaningful_turns"],
@@ -502,7 +510,7 @@ class Engine:
         return stats
 
     def restore(self, game_id: str, version: int) -> dict[str, Any]:
-        """读档：把服务端快照恢复成新的最新版本（历史不丢）。"""
+        """读档：把服务端快照恢复成**新的时间线分支**（历史不丢、未来不泄漏）。"""
         snapshot = self.db.load_snapshot(game_id, version)
         if snapshot is None:
             raise GameNotFound(f"{game_id}@v{version}")
@@ -510,18 +518,41 @@ class Engine:
         if current is None:
             raise GameNotFound(game_id)
         base_version = current["state_version"]
+
+        from_branch = snapshot.get("branch_id", "main")
+        new_branch = "b" + uuid.uuid4().hex[:6]
+        snapshot["branch_id"] = new_branch
         snapshot["state_version"] = base_version + 1
+        # 旧时间线的进行中/已排期事件与导演计划一律不带入新分支
+        snapshot["active_storylet"] = None
+        snapshot["storylet_stage"] = "none"
+        snapshot["storylet_evidence"] = {}
+        snapshot["storylet_turns"] = 0
+        snapshot["storylet_started_turn"] = None
+        snapshot["scheduled_storylet"] = None
+        snapshot["scheduled_at_version"] = None
+        snapshot["last_plan_turn"] = -1
+
         if not self.db.save_state_cas(snapshot, base_version):
             latest = self.db.load_state(game_id) or snapshot
             raise VersionConflict(latest.get("state_version", -1), latest)
+        # 把读档点之前的上下文复制进新分支（未来不复制）
+        self.db.copy_branch_context(
+            game_id,
+            from_branch=from_branch,
+            to_branch=new_branch,
+            max_turn_index=int(snapshot.get("turn_index", 0)),
+            max_state_version=version,
+        )
         self.db.add_event(game_id, "restore", "system", "committed",
-                          {"restored_version": version}, snapshot["state_version"])
+                          {"restored_version": version, "from_branch": current.get("branch_id", "main")},
+                          snapshot["state_version"], branch_id=new_branch)
         return {"restored_from": version, "state_version": snapshot["state_version"],
-                "state": self._public_state(snapshot)}
+                "branch_id": new_branch, "state": self._public_state(snapshot)}
 
     # ---------------- 内部 ----------------
 
-    def _record_llm(self, game_id: str, reply: AgentReply) -> None:
+    def _record_llm(self, game_id: str, reply: AgentReply, branch_id: str = "main") -> None:
         """把这次角色调用的指标落库；mock 路径没有 model，直接跳过。"""
         if not reply.model:
             return
@@ -534,9 +565,10 @@ class Engine:
             completion_tokens=reply.completion_tokens,
             ok=reply.source == "llm",
             error=reply.error,
+            branch_id=branch_id,
         )
 
-    def _record_director(self, game_id: str, choice: Any) -> None:
+    def _record_director(self, game_id: str, choice: Any, branch_id: str = "main") -> None:
         """记录导演调用指标（确定性打分不落库）。"""
         if choice is None or not getattr(choice, "model", ""):
             return
@@ -549,6 +581,7 @@ class Engine:
             completion_tokens=choice.completion_tokens,
             ok=getattr(choice, "source", "") == "llm",
             error=getattr(choice, "error", ""),
+            branch_id=branch_id,
         )
 
     def _turn_view(self, state: dict[str, Any]) -> dict[str, Any]:
@@ -668,23 +701,24 @@ class Engine:
         narration: list[str],
         events: list[dict[str, Any]],
         memories: list[dict[str, Any]],
+        branch_id: str = "main",
     ) -> None:
         idx = state["turn_index"]
         self.db.add_turn(game_id, idx, "player", text, {
             "topics": sorted(analysis.topics),
             "meaningful": analysis.is_meaningful,
             "reason": analysis.meaningful_reason,
-        })
+        }, branch_id=branch_id)
         for line in narration:
-            self.db.add_turn(game_id, idx, "narration", line)
+            self.db.add_turn(game_id, idx, "narration", line, branch_id=branch_id)
         self.db.add_turn(game_id, idx, "xuzhi", reply.dialogue, {
             "source": reply.source,
             "emotion": state["npc"]["current_emotion"],
-        })
+        }, branch_id=branch_id)
 
         for ev in events:
             self.db.add_event(game_id, ev["event_id"], ev["kind"], ev["status"], ev["payload"],
-                              state["state_version"])
+                              state["state_version"], branch_id=branch_id)
 
         if analysis.is_meaningful:
             memories.append({
@@ -700,4 +734,5 @@ class Engine:
                 turn_index=idx,
                 source_event_id=mem.get("source_event_id"),
                 tags=list(mem.get("tags") or []),
+                branch_id=branch_id,
             )

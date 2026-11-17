@@ -171,8 +171,11 @@ def llm_reply(
     recent: list[dict[str, Any]] = []
     memories: list[dict[str, Any]] = []
     if db is not None and game_id:
-        recent = db.recent_turns(game_id, limit=config.LIMITS.history_turns_for_prompt)
-        memories = memory_store.recall(db, game_id, analysis.normalized, k=config.LIMITS.memories_for_prompt)
+        branch = state.get("branch_id", "main")
+        recent = db.recent_turns(game_id, limit=config.LIMITS.history_turns_for_prompt,
+                                 branch_id=branch)
+        memories = memory_store.recall(db, game_id, analysis.normalized,
+                                       k=config.LIMITS.memories_for_prompt, branch_id=branch)
 
     messages = prompts.build_messages(state, analysis, storylet, content, recent, memories)
 

@@ -215,8 +215,9 @@ def choose(
     recent: list[dict[str, Any]] = []
     memories: list[dict[str, Any]] = []
     if db is not None and game_id:
-        recent = db.recent_turns(game_id, limit=6)
-        memories = memory_store.recall(db, game_id, "下一件事", k=4)
+        branch = state.get("branch_id", "main")
+        recent = db.recent_turns(game_id, limit=6, branch_id=branch)
+        memories = memory_store.recall(db, game_id, "下一件事", k=4, branch_id=branch)
 
     messages = build_messages(state, eligible, content, recent, memories)
     started = time.monotonic()

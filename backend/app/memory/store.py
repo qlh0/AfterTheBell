@@ -21,8 +21,10 @@ def remember(
     turn_index: int = 0,
     source_event_id: str | None = None,
     tags: list[str] | None = None,
+    branch_id: str = "main",
 ) -> None:
-    db.add_memory(game_id, kind, content, importance, turn_index, source_event_id, tags or [])
+    db.add_memory(game_id, kind, content, importance, turn_index, source_event_id,
+                  tags or [], branch_id=branch_id)
 
 
 def _tokens(text: str) -> set[str]:
@@ -41,12 +43,14 @@ def _tokens(text: str) -> set[str]:
     return tokens
 
 
-def recall(db: Database, game_id: str, query: str, k: int = 6) -> list[dict[str, Any]]:
+def recall(db: Database, game_id: str, query: str, k: int = 6,
+           branch_id: str = "main") -> list[dict[str, Any]]:
+    """只召回当前时间线（分支）的记忆，读档后不会看到未来。"""
     with db.read() as conn:
         rows = conn.execute(
             "SELECT kind, content, importance, turn_index, tags_json FROM memories"
-            " WHERE game_id=? ORDER BY importance DESC, id DESC LIMIT 60",
-            (game_id,),
+            " WHERE game_id=? AND branch_id=? ORDER BY importance DESC, id DESC LIMIT 60",
+            (game_id, branch_id),
         ).fetchall()
     if not rows:
         return []
