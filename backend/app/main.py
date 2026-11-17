@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 
 from . import config
 from .db import Database
-from .engine import Engine, EndingCommitted, GameNotFound, VersionConflict
+from .engine import Engine, EndingCommitted, GameNotEnded, GameNotFound, VersionConflict
 from .schemas import AdvanceRequest, InteractRequest, StartRequest
 
 API_VERSION = "0.3.0-m0"
@@ -94,6 +94,14 @@ def create_app(db: Database | None = None) -> FastAPI:
     def metrics(game_id: str):
         return engine.get_metrics(game_id)
 
+    @app.get("/game/{game_id}/record")
+    def game_record(game_id: str, branch_id: str | None = None):
+        return engine.get_record(game_id, branch_id)
+
+    @app.get("/records")
+    def records(limit: int = Query(30, ge=1, le=200)):
+        return engine.list_records(limit)
+
     @app.post("/game/{game_id}/restore/{version}")
     def restore(game_id: str, version: int):
         return engine.restore(game_id, version)
@@ -124,6 +132,13 @@ def create_app(db: Database | None = None) -> FastAPI:
         return JSONResponse(
             status_code=409,
             content={"error": "ending_committed", "detail": "本局已经结束。", "ending_id": exc.ending_id},
+        )
+
+    @app.exception_handler(GameNotEnded)
+    async def _not_ended(_request, exc: GameNotEnded):
+        return JSONResponse(
+            status_code=409,
+            content={"error": "game_not_ended", "detail": "本局还没有结束，暂无对局记录。"},
         )
 
     return app

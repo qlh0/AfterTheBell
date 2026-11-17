@@ -105,6 +105,15 @@ CREATE TABLE IF NOT EXISTS llm_calls (
     error       TEXT NOT NULL DEFAULT '',
     created_at  TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS game_records (
+    game_id     TEXT NOT NULL,
+    branch_id   TEXT NOT NULL,
+    ending_id   TEXT,
+    created_at  TEXT NOT NULL,
+    record_json TEXT NOT NULL,
+    PRIMARY KEY (game_id, branch_id)
+);
 """
 
 
@@ -443,6 +452,69 @@ class Database:
                 (game_id, branch_id, kind, content, importance, turn_index, source_event_id,
                  json.dumps(tags or [], ensure_ascii=False), utcnow()),
             )
+
+    def all_turns(self, game_id: str, branch_id: str = "main") -> list[dict[str, Any]]:
+        """按时间顺序返回某一分支的全部对话流水（生成对局记录用）。"""
+        with self.read() as conn:
+            rows = conn.execute(
+                "SELECT turn_index, role, text, meta_json, created_at FROM turns"
+                " WHERE game_id=? AND branch_id=? ORDER BY id ASC",
+                (game_id, branch_id),
+            ).fetchall()
+        return [
+            {
+                "turn_index": r["turn_index"],
+                "role": r["role"],
+                "text": r["text"],
+                "meta": json.loads(r["meta_json"] or "{}"),
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
+
+    def game_created_at(self, game_id: str) -> str:
+        with self.read() as conn:
+            row = conn.execute(
+                "SELECT created_at FROM games WHERE game_id=?", (game_id,)
+            ).fetchone()
+        return row["created_at"] if row else ""
+
+    # ---------- 对局记录 ----------
+
+    def save_record(self, game_id: str, branch_id: str, ending_id: str, record: dict[str, Any]) -> None:
+        with self.tx() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO game_records"
+                " (game_id, branch_id, ending_id, created_at, record_json) VALUES (?,?,?,?,?)",
+                (game_id, branch_id, ending_id, utcnow(),
+                 json.dumps(record, ensure_ascii=False)),
+            )
+
+    def get_record(self, game_id: str, branch_id: str | None = None) -> dict[str, Any] | None:
+        with self.read() as conn:
+            if branch_id:
+                row = conn.execute(
+                    "SELECT record_json FROM game_records WHERE game_id=? AND branch_id=?",
+                    (game_id, branch_id),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT record_json FROM game_records WHERE game_id=?"
+                    " ORDER BY created_at DESC LIMIT 1",
+                    (game_id,),
+                ).fetchone()
+        return json.loads(row["record_json"]) if row else None
+
+    def list_records(self, limit: int = 30) -> list[dict[str, Any]]:
+        with self.read() as conn:
+            rows = conn.execute(
+                "SELECT game_id, branch_id, ending_id, created_at,"
+                " json_extract(record_json, '$.ending.title') AS title,"
+                " json_extract(record_json, '$.turns.total') AS turns"
+                " FROM game_records ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     def add_llm_call(
         self,

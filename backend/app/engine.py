@@ -13,6 +13,7 @@ from typing import Any
 
 from . import config
 from . import game_state as gs
+from . import records
 from .agents import character
 from .agents.mock_character import AgentReply
 from .content import Content, load_content
@@ -50,6 +51,12 @@ class EndingCommitted(Exception):
     def __init__(self, ending_id: str | None) -> None:
         super().__init__(f"本局已结束：{ending_id}")
         self.ending_id = ending_id
+
+
+class GameNotEnded(Exception):
+    def __init__(self, game_id: str) -> None:
+        super().__init__(f"本局还没有结束：{game_id}")
+        self.game_id = game_id
 
 
 class Engine:
@@ -366,6 +373,13 @@ class Engine:
             raise VersionConflict(latest.get("state_version", -1), latest)
 
         self._persist_turn_logs(game_id, state, text, reply, analysis, narration, events, memories, branch_id)
+
+        # 结局提交后保存一份对局记录（失败不影响对局；/record 可按需重建）
+        if ending_block is not None and state["ending_phase"] == "committed":
+            try:
+                records.save(self.db, state, self.content, ending_block)
+            except Exception:
+                pass
         return response
 
     # ---------------- 对外：推进/离场 ----------------
@@ -523,6 +537,22 @@ class Engine:
             "scheduled_storylet": state["scheduled_storylet"],
         }
         return stats
+
+    def get_record(self, game_id: str, branch_id: str | None = None) -> dict[str, Any]:
+        """读取本局记录；如果结局记录缺失，从当前状态与日志重建并补存。"""
+        state = self.db.load_state(game_id)
+        if state is None:
+            raise GameNotFound(game_id)
+        branch = branch_id or state.get("branch_id", "main")
+        record = self.db.get_record(game_id, branch)
+        if record is not None:
+            return record
+        if state["ending_phase"] != "committed":
+            raise GameNotEnded(game_id)
+        return records.save(self.db, state, self.content, None)
+
+    def list_records(self, limit: int = 30) -> dict[str, Any]:
+        return {"records": self.db.list_records(limit)}
 
     def restore(self, game_id: str, version: int) -> dict[str, Any]:
         """读档：把服务端快照恢复成**新的时间线分支**（历史不丢、未来不泄漏）。"""

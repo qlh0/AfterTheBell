@@ -22,6 +22,7 @@ except Exception:  # pragma: no cover - 缺少 dotenv 时不影响运行
 BACKEND_DIR = ROOT / "backend"
 CONTENT_DIR = Path(os.environ.get("ATB_CONTENT_DIR", ROOT / "content"))
 DATA_DIR = Path(os.environ.get("ATB_DATA_DIR", BACKEND_DIR / "data"))
+RECORDS_DIR = DATA_DIR / "records"
 PROMPTS_DIR = CONTENT_DIR / "prompts"
 
 DB_PATH = Path(os.environ.get("ATB_DB_PATH", DATA_DIR / "after_the_bell.db"))

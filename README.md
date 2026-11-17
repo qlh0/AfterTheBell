@@ -66,11 +66,12 @@ Esc 打开存档菜单。
 | 导演 | LLM 在规则已过滤的候选里选事件或 `no_event`，只在关键节点调用；失败退回确定性打分；排期带版本号 |
 | 建议回复 | 规则生成 2–4 句「可以这么说」，点击填入输入框，可自行修改（不是选项分支） |
 | 指标 | `GET /game/{id}/metrics`：分用途 P50/P95/max 延迟、调用数、失败原因、token |
+| 对局记录 | 结局时自动保存：SQLite `game_records` + `backend/data/records/*.json|*.md`（含结局、状态、事件链、完整对话）；`GET /game/{id}/record`、`GET /records` |
 | 消融对照 | `tools/ablation.py`：纯 LLM / +Storylet / +Director 三种配置跑同一脚本，输出 Markdown |
 | 协议 | `POST /game/start`、`GET /game/{id}/state`、`POST /game/{id}/interact`、`POST /game/{id}/advance`、`GET /game/{id}/events`、`POST /game/{id}/restore/{version}` |
 | 规则 | 前置条件 DSL、**8 个 Storylet + 校门口 finale**、**5 个叙事目标（含 1 个可选）**、事件生命周期与证据、`eligible → prepared → committed` 结局状态机 |
 | 存储 | SQLite：权威状态、逐版本快照、`request_id` 幂等、**分支时间线（branch_id）**、回合流水、事件日志、记忆、LLM 指标 |
-| 测试 | **123 项 pytest**：三路线结局、幂等、版本冲突、无泄露、语义反例（否定/引用/疑问）、事件证据与放弃、读档分支隔离、线索、NPC 主动意图、目标谓词、新事件与结局一致性 |
+| 测试 | **128 项 pytest**：三路线结局、幂等、版本冲突、无泄露、语义反例（否定/引用/疑问）、事件证据与放弃、读档分支隔离、线索、NPC 主动意图、目标谓词、新事件与结局一致性、对局记录 |
 
 **设计红线（v0.3）**
 
@@ -143,6 +144,29 @@ Prompt 里明确要求：**先接住玩家这句话**，再让事件自然发生
 - `tools/ablation.py` 用同一套玩家脚本跑三种配置（纯 LLM / +Storylet / +Director），
   输出到 `docs/ABLATION.md`。实测结论：纯 LLM 只能收在 friends（没有机制把「那句话」摆上桌），
   加上条件 Storylet 才能到 romance；导演改变的是事件顺序与理由，代价是多几次调用。
+
+### 3.6 对局记录
+
+一局结束（`ending_phase = committed`）时自动保存三份：
+
+| 存到哪 | 内容 |
+|---|---|
+| SQLite `game_records` | 按 `(game_id, branch_id)` 唯一的一行 JSON |
+| `backend/data/records/<game>_<branch>.json` | 机器可读：结局、最终状态、事实、目标、线索、事件链、LLM 指标、完整对话 |
+| `backend/data/records/<game>_<branch>.md` | 人可读：结局标题、时长、回合、关键状态、事件结果、逐句对话 |
+
+查询：
+
+```powershell
+GET /game/{game_id}/record              # 当前分支的记录
+GET /game/{game_id}/record?branch_id=b123456
+GET /records                            # 最近的对局记录列表
+```
+
+- 只保存一次（`INSERT OR REPLACE` 保证唯一）；
+- 保存失败不影响对局；`GET /record` 发现缺失会用当前状态与日志**重建并补存**；
+- 未结束时请求记录返回 `409 game_not_ended`；
+- 记录按分支隔离：读档产生的新分支会有自己的记录，旧分支记录保留。
 
 - Prompt 里**只给定性描述**（信任"较高"、亲近感"一般"），不给数字，模型就无从把数值当台词说出来。
 - 她"不知道的事"和"绝不能主动说的秘密"写在 system prompt 里，作为防线；真正的兜底仍是后端的泄露词过滤。
@@ -260,6 +284,10 @@ D:\renpy-8.6.0-sdk\renpy.exe D:\AfterTheBell lint
 
 # 指标（后端起着时，把 <id> 换成实际 game_id）
 Invoke-RestMethod http://127.0.0.1:8756/game/<id>/metrics
+
+# 对局记录（结局后）
+Invoke-RestMethod http://127.0.0.1:8756/game/<id>/record
+Invoke-RestMethod http://127.0.0.1:8756/records
 ```
 
 ### 客户端链路自检（可选）

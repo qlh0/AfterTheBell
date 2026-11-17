@@ -233,5 +233,7 @@ screen ending_view(ending):
                 text line size 20 color "#e6ecf6" xalign 0.5 text_align 0.5
             null height 10
             text ending["closing_line"] size 16 color "#93a1b8" italic True xalign 0.5 text_align 0.5
+            null height 6
+            text "本局对局记录已保存" size 13 color "#6f7d94" xalign 0.5
             null height 12
             textbutton "回到标题" action Return(True) xalign 0.5
