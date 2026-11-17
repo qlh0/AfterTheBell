@@ -44,6 +44,8 @@ LLM_DIRECTOR_TEMPERATURE = float(os.environ.get("LLM_DIRECTOR_TEMPERATURE", "0.4
 LLM_DIRECTOR_MAX_TOKENS = int(os.environ.get("LLM_DIRECTOR_MAX_TOKENS", "220"))
 
 DIRECTOR_ENABLED = os.environ.get("ATB_DIRECTOR", "1").strip() == "1"
+# 消融对照用：关掉后不会触发任何 Storylet（"纯 LLM 聊天"对照组）
+STORYLETS_ENABLED = os.environ.get("ATB_STORYLETS", "1").strip() == "1"
 
 DEFAULT_MEANINGFUL_TURN_BUDGET = int(os.environ.get("ATB_TURN_BUDGET", "12"))
 

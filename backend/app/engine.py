@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from . import config
 from . import game_state as gs
 from .agents import character
 from .agents.mock_character import AgentReply
@@ -101,7 +102,9 @@ class Engine:
         memories: list[dict[str, Any]] = []
 
         # 1. 新回合开始：激活已排期事件（或直接进入 finale）
-        activation = scheduler.try_activate(state, self.content.storylets)
+        activation = None
+        if config.STORYLETS_ENABLED:
+            activation = scheduler.try_activate(state, self.content.storylets)
         if activation is not None:
             narration.append(activation.cue)
             changes.append({
@@ -231,7 +234,7 @@ class Engine:
         # 9. 规划下一事件：关键节点才请导演；普通闲聊不触发
         planning_status = "not_required"
         director_choice = None
-        if state["ending_phase"] != "committed":
+        if state["ending_phase"] != "committed" and config.STORYLETS_ENABLED:
             reason = (
                 "storylet_resolved" if resolved_id
                 else ("advance" if moved else "turn")
@@ -260,6 +263,24 @@ class Engine:
                         "based_on_version": state["state_version"],
                     },
                 })
+
+        # 9.5 兜底收束：没有可用事件（或消融对照关掉 Storylet）时，也不能无限聊下去
+        force_at = (
+            int(state["budget"]["soft_end_at"])
+            if not config.STORYLETS_ENABLED
+            else int(state["budget"]["hard_end_at"])
+        )
+        if state["ending_phase"] != "committed" and gs.progress(state) >= force_at:
+            resolution = ending_rules.resolve(state, self.content)
+            changes.extend(resolution.changes)
+            ending_block = ending_rules.ending_block(state, self.content)
+            narration.append("天已经完全黑下来了，你们站在校门口，谁都没有先走。")
+            events.append({
+                "event_id": "forced_finale",
+                "kind": "ending",
+                "status": "committed",
+                "payload": {"reason": "hard_end_without_finale", "ending": state["ending_id"]},
+            })
 
         # 10. 收尾：情绪 → 版本 → 乐观并发提交 → 日志
         emotion = reply.emotion if reply.emotion in gs.EMOTIONS else gs.derive_emotion(state)
@@ -322,7 +343,9 @@ class Engine:
                 changes.append({"path": "scene", "before": "classroom", "after": "school_gate",
                                 "reason": "player_advance"})
 
-        activation = scheduler.try_activate(state, self.content.storylets)
+        activation = None
+        if config.STORYLETS_ENABLED:
+            activation = scheduler.try_activate(state, self.content.storylets)
         planning_status = "not_required"
         if activation is not None:
             narration.append(activation.cue)
@@ -339,22 +362,23 @@ class Engine:
                 chooser=lambda st, el: director_llm.choose(
                     st, el, self.content, self.db, game_id, why="advance"
                 ),
-            )
-            planning_status = plan.status
-            self._record_director(game_id, plan.director)
-            if plan.status != "not_required":
-                events.append({
-                    "event_id": plan.storylet_id or "no_event",
-                    "kind": "director",
-                    "status": plan.status,
-                    "payload": {
-                        "reason": plan.reason,
-                        "choice": plan.storylet_id,
-                        "source": getattr(plan.director, "source", "deterministic"),
-                        "director_reason": getattr(plan.director, "reason", ""),
-                        "based_on_version": state["state_version"],
-                    },
-                })
+            ) if config.STORYLETS_ENABLED else None
+            if plan is not None:
+                planning_status = plan.status
+                self._record_director(game_id, plan.director)
+                if plan.status != "not_required":
+                    events.append({
+                        "event_id": plan.storylet_id or "no_event",
+                        "kind": "director",
+                        "status": plan.status,
+                        "payload": {
+                            "reason": plan.reason,
+                            "choice": plan.storylet_id,
+                            "source": getattr(plan.director, "source", "deterministic"),
+                            "director_reason": getattr(plan.director, "reason", ""),
+                            "based_on_version": state["state_version"],
+                        },
+                    })
 
         changes.extend(action_rules.record_goal_progress(state))
         if ending_rules.maybe_make_eligible(state):
@@ -414,6 +438,26 @@ class Engine:
             raise GameNotFound(game_id)
         return {"game_id": game_id, "events": self.db.list_events(game_id),
                 "metrics": self.db.llm_metrics(game_id)}
+
+    def get_metrics(self, game_id: str) -> dict[str, Any]:
+        """M3 指标面板：分用途的调用数、延迟分位、token、失败原因 + 本局进度。"""
+        state = self.db.load_state(game_id)
+        if state is None:
+            raise GameNotFound(game_id)
+        stats = self.db.llm_stats(game_id)
+        stats["session"] = {
+            "scene": state["scene"],
+            "turn_index": state["turn_index"],
+            "meaningful_turns": state["meaningful_turns"],
+            "progress": gs.progress(state),
+            "budget": state["budget"],
+            "ending_phase": state["ending_phase"],
+            "ending_id": state["ending_id"],
+            "used_storylets": list(state.get("used_storylets") or []),
+            "active_storylet": state["active_storylet"],
+            "scheduled_storylet": state["scheduled_storylet"],
+        }
+        return stats
 
     def restore(self, game_id: str, version: int) -> dict[str, Any]:
         """读档：把服务端快照恢复成新的最新版本（历史不丢）。"""

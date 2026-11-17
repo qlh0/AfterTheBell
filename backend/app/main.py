@@ -90,6 +90,10 @@ def create_app(db: Database | None = None) -> FastAPI:
     def events(game_id: str):
         return engine.get_events(game_id)
 
+    @app.get("/game/{game_id}/metrics")
+    def metrics(game_id: str):
+        return engine.get_metrics(game_id)
+
     @app.post("/game/{game_id}/restore/{version}")
     def restore(game_id: str, version: int):
         return engine.restore(game_id, version)

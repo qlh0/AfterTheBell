@@ -12,7 +12,7 @@ image xuzhi guarded = "images/xuzhi_guarded.png"
 image xuzhi smile = "images/xuzhi_smile.png"
 
 transform sprite_pos:
-    xalign 0.10
+    xalign 0.5
     yalign 1.0
 
 default persistent.endings_seen = {}
@@ -33,6 +33,7 @@ default ending_data = None
 default backend_ok = False
 default backend_error = ""
 default selfcheck_mode = False
+default selfcheck_shot_name = "chat"
 
 
 label splashscreen:
@@ -55,8 +56,15 @@ label selfcheck:
         $ atb_selfcheck_note("advance_err=%r scene=%s sprite=%s" % (_err, scene_id, sprite_id))
     $ atb_selfcheck_note("chat_log=%d suggestions=%d" % (len(chat_log), len(suggestions)))
     $ atb_render_scene(transition=False)
+    $ selfcheck_shot_name = "chat"
+    $ log_expanded = False
     $ _res = renpy.call_screen("chat_ui")
     $ atb_selfcheck_note("screen_ok res=%r" % (_res,))
+    $ selfcheck_shot_name = "chat_log"
+    $ log_expanded = True
+    $ _res_log = renpy.call_screen("chat_ui")
+    $ atb_selfcheck_note("log_screen_ok res=%r" % (_res_log,))
+    $ log_expanded = False
     $ _demo_ending = {"id": "romance", "title": "测试结局", "subtitle": "SELF CHECK",
                       "epilogue": ["第一行测试文本。", "第二行测试文本。"], "closing_line": "——测试用结尾。"}
     $ atb_selfcheck_note("ending_begin")

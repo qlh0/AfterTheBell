@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 import uuid
 from contextlib import contextmanager
@@ -376,6 +377,59 @@ class Database:
             "failures": row["fails"] or 0,
             "prompt_tokens": row["pt"] or 0,
             "completion_tokens": row["ct"] or 0,
+        }
+
+    def llm_stats(self, game_id: str) -> dict[str, Any]:
+        """分用途的调用统计：调用数、失败数、P50/P95 延迟、token。"""
+        with self.read() as conn:
+            rows = conn.execute(
+                "SELECT purpose, latency_ms, prompt_tokens, completion_tokens, ok, error"
+                " FROM llm_calls WHERE game_id=? ORDER BY id ASC",
+                (game_id,),
+            ).fetchall()
+
+        def pct(values: list[int], p: float) -> int:
+            if not values:
+                return 0
+            ordered = sorted(values)
+            idx = max(0, min(len(ordered) - 1, math.ceil(p * len(ordered)) - 1))
+            return ordered[idx]
+
+        by_purpose: dict[str, dict[str, Any]] = {}
+        totals = {"calls": 0, "failures": 0, "prompt_tokens": 0, "completion_tokens": 0}
+        errors: dict[str, int] = {}
+        for row in rows:
+            purpose = row["purpose"] or "unknown"
+            bucket = by_purpose.setdefault(purpose, {
+                "calls": 0, "failures": 0, "latencies": [],
+                "prompt_tokens": 0, "completion_tokens": 0, "errors": {},
+            })
+            bucket["calls"] += 1
+            bucket["latencies"].append(int(row["latency_ms"] or 0))
+            bucket["prompt_tokens"] += int(row["prompt_tokens"] or 0)
+            bucket["completion_tokens"] += int(row["completion_tokens"] or 0)
+            totals["calls"] += 1
+            totals["prompt_tokens"] += int(row["prompt_tokens"] or 0)
+            totals["completion_tokens"] += int(row["completion_tokens"] or 0)
+            if not row["ok"]:
+                bucket["failures"] += 1
+                totals["failures"] += 1
+                key = (row["error"] or "unknown").split(":")[0]
+                bucket["errors"][key] = bucket["errors"].get(key, 0) + 1
+                errors[key] = errors.get(key, 0) + 1
+
+        for bucket in by_purpose.values():
+            lat = bucket.pop("latencies")
+            bucket["avg_latency_ms"] = round(sum(lat) / len(lat), 1) if lat else 0
+            bucket["p50_latency_ms"] = pct(lat, 0.50)
+            bucket["p95_latency_ms"] = pct(lat, 0.95)
+            bucket["max_latency_ms"] = max(lat) if lat else 0
+
+        return {
+            "game_id": game_id,
+            "by_purpose": by_purpose,
+            "totals": totals,
+            "errors": errors,
         }
 
 

@@ -1,6 +1,6 @@
-## 游戏内界面（M2）：
-## 场景立绘在上方，角色对白 / 旁白 / 建议回复 / 输入框全部在下方；
-## 聊天记录默认只显示最近几条，点「聊天记录」展开完整历史。
+## 游戏内界面（M3）：
+## 女主站在画面正中；底部是角色对白 / 旁白 / 建议回复 / 输入框；
+## 右上角「聊天记录」按钮点开后，从右侧滑出一块记录面板，不遮挡女主。
 
 style chat_button is button:
     padding (10, 4)
@@ -21,6 +21,16 @@ style chip_button_text is button_text:
     color "#a9b8cd"
     hover_color "#ffe0b5"
 
+style log_button is button:
+    background Solid("#0a0e16d8")
+    hover_background Solid("#16202e")
+    padding (12, 6)
+
+style log_button_text is button_text:
+    size 16
+    color "#dbe4f2"
+    hover_color "#ffe0b5"
+
 
 screen chat_entry(item):
     if item["who"] == "narrator":
@@ -36,110 +46,109 @@ screen chat_ui():
     zorder 50
 
     if store.selfcheck_mode:
-        timer 0.8 action [Function(atb_screenshot, "chat"), Return(("quit", None))]
+        timer 0.8 action [Function(atb_screenshot, store.selfcheck_shot_name), Return(("quit", None))]
 
-    ## ---------------- 完整聊天记录（默认收起） ----------------
     if store.log_expanded:
-        button:
-            xfill True
-            yfill True
-            background Solid("#00000088")
-            action SetVariable("log_expanded", False)
-
+        ## ---------------- 右侧聊天记录抽屉（不遮女主） ----------------
         frame:
-            xalign 0.5
-            yalign 0.5
-            xsize 1060
-            ysize 620
-            background Solid("#0b1018f7")
-            padding (28, 20)
+            background Solid("#0a0e16f2")
+            xalign 1.0
+            xoffset -12
+            yoffset 58
+            xsize 380
+            ysize 650
+            padding (18, 12)
 
             vbox:
-                spacing 12
+                spacing 8
                 hbox:
-                    text "聊天记录" size 22 color "#f2c9a2"
+                    text "聊天记录" size 18 color "#f2c9a2"
+                    text ("共 %d 条" % len(store.chat_log)) size 12 color "#6f7d94" yalign 0.6
                     null width 1
-                    text ("共 %d 条" % len(store.chat_log)) size 13 color "#6f7d94" yalign 0.6
-                    null width 12
                     textbutton "收起" style "chat_button" action SetVariable("log_expanded", False)
 
                 viewport:
-                    ysize 512
+                    ysize 578
                     mousewheel True
                     draggable True
                     yinitial 1.0
                     vbox:
-                        spacing 12
+                        spacing 10
                         for item in store.chat_log:
                             use chat_entry(item)
 
-    ## ---------------- 底部对话面板 ----------------
-    frame:
-        background Solid("#0a0e16f0")
-        xfill True
-        yalign 1.0
-        ysize 306
-        padding (24, 12)
+    else:
+        ## ---------------- 底部对话面板 ----------------
+        frame:
+            background Solid("#0a0e16f0")
+            xfill True
+            yalign 1.0
+            ysize 306
+            padding (24, 12)
 
-        vbox:
-            spacing 7
+            vbox:
+                spacing 7
 
-            hbox:
-                spacing 10
-                text "许栀" size 20 color "#f2c9a2" bold True
-                if store.current_event_title:
-                    text "- [current_event_title]" size 14 color "#93a1b8" yalign 0.5
-                null width 1
-                text "第[turn_index]回合" size 12 color "#6f7d94" yalign 0.6
-                null width 16
-                textbutton ("聊天记录 (%d)" % len(store.chat_log)):
-                    style "chat_button"
-                    action SetVariable("log_expanded", True)
+                hbox:
+                    spacing 10
+                    text "许栀" size 20 color "#f2c9a2" bold True
+                    if store.current_event_title:
+                        text "- [current_event_title]" size 14 color "#93a1b8" yalign 0.5
+                    null width 1
+                    text "第[turn_index]回合" size 12 color "#6f7d94" yalign 0.6
 
-            viewport:
-                ysize 124
-                mousewheel True
-                draggable True
-                yinitial 1.0
-                vbox:
-                    spacing 9
-                    for item in store.chat_log[-6:]:
-                        use chat_entry(item)
+                viewport:
+                    ysize 124
+                    mousewheel True
+                    draggable True
+                    yinitial 1.0
+                    vbox:
+                        spacing 9
+                        for item in store.chat_log[-6:]:
+                            use chat_entry(item)
 
-            if store.suggestions:
+                if store.suggestions:
+                    hbox:
+                        spacing 8
+                        for sug in store.suggestions:
+                            textbutton sug["label"]:
+                                style "chip_button"
+                                action SetVariable("input_text", sug["text"])
+
+                hbox:
+                    spacing 10
+                    frame:
+                        background Solid("#151d2b")
+                        padding (12, 5)
+                        xsize 1040
+                        input:
+                            value VariableInputValue("input_text")
+                            length 200
+                            size 19
+                            color "#eef2f8"
+                            caret Solid("#f2c9a2", xsize=2)
+                            xsize 1000
+                    textbutton "发送":
+                        style "chat_button"
+                        action If(store.input_text.strip() != "", Return(("send", store.input_text)), NullAction())
+                        sensitive store.input_text.strip() != ""
+
                 hbox:
                     spacing 8
-                    for sug in store.suggestions:
-                        textbutton sug["label"]:
-                            style "chip_button"
-                            action SetVariable("input_text", sug["text"])
+                    textbutton "推进时间" style "chat_button" action Return(("advance", None))
+                    textbutton "结束本局" style "chat_button" action Return(("quit", None))
+                    null width 6
+                    text "Enter 发送，上面是可参考的说法，点一下填进输入框，可以自己改" size 12 color "#6f7d94" yalign 0.6
 
-            hbox:
-                spacing 10
-                frame:
-                    background Solid("#151d2b")
-                    padding (12, 5)
-                    xsize 1040
-                    input:
-                        value VariableInputValue("input_text")
-                        length 200
-                        size 19
-                        color "#eef2f8"
-                        caret Solid("#f2c9a2", xsize=2)
-                        xsize 1000
-                textbutton "发送":
-                    style "chat_button"
-                    action If(store.input_text.strip() != "", Return(("send", store.input_text)), NullAction())
-                    sensitive store.input_text.strip() != ""
+        ## ---------------- 右上角：展开聊天记录 ----------------
+        textbutton ("聊天记录 (%d)" % len(store.chat_log)):
+            style "log_button"
+            xalign 1.0
+            xoffset -16
+            yoffset 14
+            action SetVariable("log_expanded", True)
 
-            hbox:
-                spacing 8
-                textbutton "推进时间" style "chat_button" action Return(("advance", None))
-                textbutton "结束本局" style "chat_button" action Return(("quit", None))
-                null width 6
-                text "Enter 发送，上面是可参考的说法，点一下填进输入框，可以自己改" size 12 color "#6f7d94" yalign 0.6
-
-    key "K_RETURN" action If(store.input_text.strip() != "", Return(("send", store.input_text)), NullAction())
+    key "K_RETURN" action If(not store.log_expanded and store.input_text.strip() != "", Return(("send", store.input_text)), NullAction())
 
 
 screen thinking_overlay():

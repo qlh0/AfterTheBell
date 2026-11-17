@@ -3,10 +3,14 @@
 一个以**自由输入对话**为主要交互的校园恋爱视觉小说 Demo。
 AI 负责自然对白，**可验证的规则**负责世界事实、事件触发与结局判定。
 
-- 当前状态：**M2 已完成**——真实 LLM 驱动许栀的对白，LLM 导演在合法候选里选事件；规则仍然掌控事实与结局。
+- 当前状态：**M3 已完成**——角色 Agent、LLM 导演、指标面板、消融对照与三结局闭环都已就位。
 - 平台：Ren'Py 8.6 桌面版；通信为普通 HTTP/JSON（无 SSE）。
 
-![游戏界面（M2：下方对话区 + 建议回复）](docs/ui_chat.jpg)
+![游戏界面（M3：女主居中 + 右下对话区 + 右上角聊天记录）](docs/ui_chat.jpg)
+
+聊天记录从右上角按钮展开为右侧抽屉，不遮挡人物：
+
+![展开聊天记录](docs/ui_chat_log.jpg)
 
 ---
 
@@ -43,14 +47,16 @@ Esc 打开存档菜单。
 
 | 层 | 内容 |
 |---|---|
-| 客户端 | Ren'Py 8.6，中文 UI（内置思源黑体）；**下方对话区**（角色对白 / 旁白 / 输入 / 建议回复），**聊天记录按钮可展开**，思考中提示，后端离线兜底，三种结局演出，读档快照对齐 |
+| 客户端 | Ren'Py 8.6，中文 UI（内置思源黑体）；**女主居中**，底部对话区（角色对白 / 旁白 / 输入 / 建议回复），**右上角聊天记录按钮 → 右侧抽屉**，思考中提示，后端离线兜底，三种结局演出，读档快照对齐 |
 | 角色 Agent | 真实 LLM（DeepSeek `deepseek-chat`，OpenAI 兼容），JSON 输出 + 校验 + 语气兜底 + 重试；`mock` 模式可离线 |
-| 导演 | **M2：LLM 在规则已过滤的候选里选事件或 `no_event`**，只在关键节点调用；失败退回确定性打分；排期带版本号 |
+| 导演 | LLM 在规则已过滤的候选里选事件或 `no_event`，只在关键节点调用；失败退回确定性打分；排期带版本号 |
 | 建议回复 | 规则生成 2–4 句「可以这么说」，点击填入输入框，可自行修改（不是选项分支） |
+| 指标 | `GET /game/{id}/metrics`：分用途 P50/P95/max 延迟、调用数、失败原因、token |
+| 消融对照 | `tools/ablation.py`：纯 LLM / +Storylet / +Director 三种配置跑同一脚本，输出 Markdown |
 | 协议 | `POST /game/start`、`GET /game/{id}/state`、`POST /game/{id}/interact`、`POST /game/{id}/advance`、`GET /game/{id}/events`、`POST /game/{id}/restore/{version}` |
 | 规则 | 前置条件 DSL、6 个 Storylet + 校门口 finale、4 个叙事目标、`eligible → prepared → committed` 结局状态机 |
 | 存储 | SQLite：权威状态、逐版本快照、`request_id` 幂等、回合流水、事件日志、记忆、LLM 指标 |
-| 测试 | **61 项 pytest**：三路线结局、幂等、版本冲突、无泄露、数值上限、LLM 解析/校验/兜底、导演决策/失效、建议回复、刻薄重写 |
+| 测试 | **67 项 pytest**：三路线结局、幂等、版本冲突、无泄露、数值上限、LLM 解析/校验/兜底、导演决策/失效、建议回复、刻薄重写、指标分位、沉默/刷屏收束、消融开关 |
 
 **设计红线（M1/M2 依然成立）**
 
@@ -108,8 +114,16 @@ Prompt 里明确要求：**先接住玩家这句话**，再让事件自然发生
 
 ### 3.4 UI
 
-- 场景与立绘在上方；角色对白、旁白、建议回复、输入框、按钮全部在下方。
-- 底部只显示最近几条，点「聊天记录 (N)」展开完整历史（可滚动、点空白处收起）。
+- 女主站在画面正中；角色对白、旁白、建议回复、输入框、按钮全部在下方。
+- 右上角「聊天记录 (N)」按钮 → 从右侧展开记录抽屉（不遮挡人物）；点「收起」恢复输入。
+
+### 3.5 指标与消融
+
+- `GET /game/{id}/metrics` 返回：分 `purpose`（character / director）的调用数、失败数、
+  P50/P95/max 延迟、token，失败原因分布，以及本局进度与结局状态。指标不进玩家可见响应。
+- `tools/ablation.py` 用同一套玩家脚本跑三种配置（纯 LLM / +Storylet / +Director），
+  输出到 `docs/ABLATION.md`。实测结论：纯 LLM 只能收在 friends（没有机制把「那句话」摆上桌），
+  加上条件 Storylet 才能到 romance；导演改变的是事件顺序与理由，代价是多几次调用。
 
 - Prompt 里**只给定性描述**（信任"较高"、亲近感"一般"），不给数字，模型就无从把数值当台词说出来。
 - 她"不知道的事"和"绝不能主动说的秘密"写在 system prompt 里，作为防线；真正的兜底仍是后端的泄露词过滤。
@@ -145,9 +159,10 @@ AfterTheBell/
 ├─ tests/                     pytest（47 项）
 ├─ tools/
 │  ├─ play.py                 终端模拟一局（不开 Ren'Py 也能验状态机）
+│  ├─ ablation.py             消融对照（纯 LLM / +Storylet / +Director）
 │  ├─ prepare_art.py          原图 → 游戏规格（背景/立绘/菜单图）
 │  └─ make_placeholder_art.py 无美术时的占位图生成
-├─ docs/                      M0 / M1 验收记录
+├─ docs/                      M0–M3 验收记录 + 消融结果
 ├─ run_dev.bat                一键启动（后端 + 游戏）
 └─ .env.example               复制成 .env 后填 LLM Key
 ```
@@ -218,6 +233,12 @@ D:\renpy-8.6.0-sdk\renpy.exe D:\AfterTheBell lint
 .venv\Scripts\python.exe tools\play.py --route communicate --verbose
 .venv\Scripts\python.exe tools\play.py --route control
 .venv\Scripts\python.exe tools\play.py --route avoid
+
+# 消融对照（三种配置各跑一遍，输出 docs/ABLATION.md）
+.venv\Scripts\python.exe tools\ablation.py --routes communicate --out docs/ABLATION.md
+
+# 指标（后端起着时，把 <id> 换成实际 game_id）
+Invoke-RestMethod http://127.0.0.1:8756/game/<id>/metrics
 ```
 
 ### 客户端链路自检（可选）
@@ -238,20 +259,23 @@ Get-Content game\selfcheck.txt
 
 1. **没有流式输出**：一次请求返回完整 JSON；角色单轮约 1.5–2.5 秒，界面只有"正在回复"提示。
 2. **导演是请求内同步执行**：只在关键节点（约每 2–3 轮一次）多 1–2 秒等待；普通对话不受影响。后续可改成返回后台任务，下一轮激活前复核版本。
-3. **模型的事件结果提议只记录、不提交**：规则判定优先。要让模型参与结果判定，需要更细的证据校验（M3）。
+3. **模型的事件结果提议只记录、不提交**：规则判定优先。要让模型参与结果判定，需要更细的证据校验。
 4. **模型动作提议受严格证据约束**：玩家表达很隐晦时，规则的关键词解析也可能漏，此时状态推进偏保守（宁可少给，不乱给）。
 5. **建议回复是规则生成的**：同一状态下句子固定，可能重复；它只是提示，不是选项。
 6. **存档**：关掉回滚；存档点与后端快照对齐，不支持跨分支回滚。
 7. **中文输入法**：走 Ren'Py 的 IME 输入，未在 Web 版验证。
-8. **成本**：角色每轮 prompt ≈1.3–1.5k tokens、输出 ≈40–70 tokens；导演每次 ≈300–500 tokens，约每 2–3 轮一次。测试不烧 token（强制 mock）。
+8. **真人时长未测**：脚本路线约 10–11 轮；15–20 分钟的目标体验还需要真人试玩确认。
+9. **成本**：角色每轮 prompt ≈1.3–1.5k tokens、输出 ≈40–70 tokens；导演每次 ≈300–500 tokens，约每 2–3 轮一次。测试不烧 token（强制 mock）。
 
 ---
 
 ## 9. 路线图
 
-- **M3 收束**：结局铺垫节奏、指标面板（延迟 P50/P95、调用数、token、失败原因）、消融对照（纯 LLM / +Storylet / +Director）、真人 15–20 分钟时长测试。
+M0–M3 已交付。剩余工作：
+
+- **真人 15–20 分钟时长测试**与节奏微调（需要实际试玩）。
 - 导演异步化 + 更细的证据校验，让模型的事件结果提议在证据充分时参与判定。
-- Web 端适配（`renpy.fetch`、中文输入、CORS/HTTPS）。
+- Web 端适配（`renpy.fetch`、中文输入、CORS/HTTPS），以及完整的跨分支存档。
 
 ---
 
