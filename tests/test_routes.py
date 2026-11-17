@@ -68,9 +68,14 @@ def test_routes_diverge_in_state_not_only_dialogue(engine):
     gid_b, last_b, _ = play(engine, ROUTE_CONTROL)
     a = internal(engine, gid_a)
     b = internal(engine, gid_b)
-    assert a["relationship"]["trust"] > b["relationship"]["trust"]
-    assert a["relationship"]["respect_for_autonomy"] > b["relationship"]["respect_for_autonomy"]
+    # 不同策略要产生「实际状态差异」，而不是只有对白不同
+    assert a["facts"] != b["facts"]
+    assert a["relationship"] != b["relationship"]
     assert a["ending_id"] != b["ending_id"]
+    assert a["facts"]["player_expressed_romance"] is True
+    assert b["facts"]["player_expressed_romance"] is False
+    assert a["ending_id"] == "romance"
+    assert b["ending_id"] == "friends"
 
 
 def test_storylets_are_not_repeated(engine):

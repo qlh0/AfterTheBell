@@ -1,13 +1,35 @@
-## 游戏内界面：聊天面板、等待提示、后端离线提示、结局卡。
+## 游戏内界面（M2）：
+## 场景立绘在上方，角色对白 / 旁白 / 建议回复 / 输入框全部在下方；
+## 聊天记录默认只显示最近几条，点「聊天记录」展开完整历史。
 
 style chat_button is button:
     padding (10, 4)
 
 style chat_button_text is button_text:
-    size 18
+    size 17
     color "#dbe4f2"
     hover_color "#ffe0b5"
     insensitive_color "#5a6478"
+
+style chip_button is button:
+    background Solid("#192434")
+    hover_background Solid("#24344a")
+    padding (12, 5)
+
+style chip_button_text is button_text:
+    size 14
+    color "#a9b8cd"
+    hover_color "#ffe0b5"
+
+
+screen chat_entry(item):
+    if item["who"] == "narrator":
+        text item["text"] size 16 color "#93a1b8" italic True
+    elif item["who"] == "xuzhi":
+        text ("{color=#f2c9a2}许栀{/color}  " + item["text"]) size 19 color "#eaeff8"
+    else:
+        text ("{color=#7f9dcb}你{/color}  " + item["text"]) size 19 color "#eaeff8"
+
 
 screen chat_ui():
     modal True
@@ -16,75 +38,106 @@ screen chat_ui():
     if store.selfcheck_mode:
         timer 0.8 action [Function(atb_screenshot, "chat"), Return(("quit", None))]
 
+    ## ---------------- 完整聊天记录（默认收起） ----------------
+    if store.log_expanded:
+        button:
+            xfill True
+            yfill True
+            background Solid("#00000088")
+            action SetVariable("log_expanded", False)
+
+        frame:
+            xalign 0.5
+            yalign 0.5
+            xsize 1060
+            ysize 620
+            background Solid("#0b1018f7")
+            padding (28, 20)
+
+            vbox:
+                spacing 12
+                hbox:
+                    text "聊天记录" size 22 color "#f2c9a2"
+                    null width 1
+                    text ("共 %d 条" % len(store.chat_log)) size 13 color "#6f7d94" yalign 0.6
+                    null width 12
+                    textbutton "收起" style "chat_button" action SetVariable("log_expanded", False)
+
+                viewport:
+                    ysize 512
+                    mousewheel True
+                    draggable True
+                    yinitial 1.0
+                    vbox:
+                        spacing 12
+                        for item in store.chat_log:
+                            use chat_entry(item)
+
+    ## ---------------- 底部对话面板 ----------------
     frame:
-        background Solid("#0a0e16e8")
-        xalign 1.0
-        xoffset -20
-        yalign 0.5
-        xsize 600
-        ysize 660
-        padding (20, 16)
+        background Solid("#0a0e16f0")
+        xfill True
+        yalign 1.0
+        ysize 306
+        padding (24, 12)
 
         vbox:
-            spacing 8
+            spacing 7
 
             hbox:
                 spacing 10
-                text "许栀" size 22 color "#f2c9a2" bold True
+                text "许栀" size 20 color "#f2c9a2" bold True
                 if store.current_event_title:
-                    text "- [current_event_title]" size 15 color "#93a1b8" yalign 0.5
+                    text "- [current_event_title]" size 14 color "#93a1b8" yalign 0.5
                 null width 1
-                text "第[turn_index]回合" size 13 color "#6f7d94" xalign 1.0
+                text "第[turn_index]回合" size 12 color "#6f7d94" yalign 0.6
+                null width 16
+                textbutton ("聊天记录 (%d)" % len(store.chat_log)):
+                    style "chat_button"
+                    action SetVariable("log_expanded", True)
 
             viewport:
-                ysize 466
+                ysize 124
                 mousewheel True
                 draggable True
                 yinitial 1.0
-
                 vbox:
-                    spacing 14
-                    xsize 528
+                    spacing 9
+                    for item in store.chat_log[-6:]:
+                        use chat_entry(item)
 
-                    for item in store.chat_log:
-                        if item["who"] == "narrator":
-                            text item["text"] size 17 color "#93a1b8" italic True
-                        else:
-                            hbox:
-                                spacing 10
-                                add Solid("#f2c9a2" if item["who"] == "xuzhi" else "#7f9dcb"):
-                                    xsize 3
-                                    ysize 24
-                                    yalign 0.12
-                                vbox:
-                                    spacing 3
-                                    text ("许栀" if item["who"] == "xuzhi" else "你"):
-                                        size 12
-                                        color ("#f2c9a2" if item["who"] == "xuzhi" else "#7f9dcb")
-                                    text item["text"] size 20 color "#eaeff8"
-
-            frame:
-                background Solid("#151d2b")
-                padding (12, 6)
-                xfill True
-                input:
-                    value VariableInputValue("input_text")
-                    length 200
-                    size 20
-                    color "#eef2f8"
-                    caret Solid("#f2c9a2", xsize=2)
-                    xsize 500
+            if store.suggestions:
+                hbox:
+                    spacing 8
+                    for sug in store.suggestions:
+                        textbutton sug["label"]:
+                            style "chip_button"
+                            action SetVariable("input_text", sug["text"])
 
             hbox:
                 spacing 10
+                frame:
+                    background Solid("#151d2b")
+                    padding (12, 5)
+                    xsize 1040
+                    input:
+                        value VariableInputValue("input_text")
+                        length 200
+                        size 19
+                        color "#eef2f8"
+                        caret Solid("#f2c9a2", xsize=2)
+                        xsize 1000
                 textbutton "发送":
                     style "chat_button"
                     action If(store.input_text.strip() != "", Return(("send", store.input_text)), NullAction())
                     sensitive store.input_text.strip() != ""
+
+            hbox:
+                spacing 8
                 textbutton "推进时间" style "chat_button" action Return(("advance", None))
                 textbutton "结束本局" style "chat_button" action Return(("quit", None))
-                null width 1
-                text "Enter 发送" size 12 color "#6f7d94" yalign 0.6
+                null width 6
+                text "Enter 发送，上面是可参考的说法，点一下填进输入框，可以自己改" size 12 color "#6f7d94" yalign 0.6
 
     key "K_RETURN" action If(store.input_text.strip() != "", Return(("send", store.input_text)), NullAction())
 
@@ -95,7 +148,7 @@ screen thinking_overlay():
         background Solid("#0a0e16dd")
         padding (16, 8)
         xalign 0.5
-        yalign 0.06
+        yalign 0.04
         hbox:
             spacing 6
             text "许栀正在回复" size 17 color "#f2c9a2"

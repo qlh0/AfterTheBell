@@ -16,10 +16,10 @@ from .agents.mock_character import AgentReply
 from .content import Content, load_content
 from .db import Database, new_game_id
 from .memory import store as memory_store
-from .narrative import scheduler
+from .narrative import director_llm, scheduler
 from .rules import actions as action_rules
 from .rules import endings as ending_rules
-from .rules import meaningful_turn, storylet_resolution
+from .rules import meaningful_turn, storylet_resolution, suggestions as suggestion_rules
 
 OPENING_NARRATION = [
     "放学铃响过二十分钟，教室里只剩下你们两个。",
@@ -70,6 +70,7 @@ class Engine:
             "emotion": "guarded",
             "presentation": self._presentation(state),
             "state": self._public_state(state),
+            "suggestions": suggestion_rules.suggestions(state),
         }
 
     # ---------------- 对外：一次对话 ----------------
@@ -199,10 +200,12 @@ class Engine:
             state["meaningful_turns"] += 1
 
         # 7. 场景推进：放学了就该走，避免玩家永远困在教室
+        moved = False
         if state["scene"] == "classroom" and (
             "leave" in analysis.topics or gs.progress(state) >= 5
         ):
             state["scene"] = "school_gate"
+            moved = True
             narration.append("你们收好各自的东西，一前一后下了楼。校门口的路灯刚亮。")
             changes.append({
                 "path": "scene",
@@ -225,21 +228,37 @@ class Engine:
             events.append({"event_id": "ending_eligible", "kind": "ending", "status": "eligible",
                            "payload": {}})
 
-        # 9. 规划下一事件（确定性，不调用 LLM；失败/过时都不影响本回合对白）
+        # 9. 规划下一事件：关键节点才请导演；普通闲聊不触发
         planning_status = "not_required"
+        director_choice = None
         if state["ending_phase"] != "committed":
             reason = (
                 "storylet_resolved" if resolved_id
-                else ("fact_unlocked" if action_changes else "turn")
+                else ("advance" if moved else "turn")
             )
-            plan = scheduler.plan_next(state, self.content.storylets, reason)
+            plan = scheduler.plan_next(
+                state,
+                self.content.storylets,
+                reason,
+                chooser=lambda st, el: director_llm.choose(
+                    st, el, self.content, self.db, game_id, why=reason
+                ),
+            )
             planning_status = plan.status
-            if plan.status == "scheduled" and plan.storylet_id:
+            director_choice = plan.director
+            self._record_director(game_id, director_choice)
+            if plan.status != "not_required":
                 events.append({
-                    "event_id": plan.storylet_id,
-                    "kind": "storylet",
-                    "status": "scheduled",
-                    "payload": {"reason": plan.reason, "based_on_version": state["state_version"]},
+                    "event_id": plan.storylet_id or "no_event",
+                    "kind": "director",
+                    "status": plan.status,
+                    "payload": {
+                        "reason": plan.reason,
+                        "choice": plan.storylet_id,
+                        "source": getattr(director_choice, "source", "deterministic"),
+                        "director_reason": getattr(director_choice, "reason", ""),
+                        "based_on_version": state["state_version"],
+                    },
                 })
 
         # 10. 收尾：情绪 → 版本 → 乐观并发提交 → 日志
@@ -313,11 +332,29 @@ class Engine:
                            "status": "activated", "payload": {"how": activation.how}})
             planning_status = "activated"
         else:
-            plan = scheduler.plan_next(state, self.content.storylets, "advance")
+            plan = scheduler.plan_next(
+                state,
+                self.content.storylets,
+                "advance",
+                chooser=lambda st, el: director_llm.choose(
+                    st, el, self.content, self.db, game_id, why="advance"
+                ),
+            )
             planning_status = plan.status
-            if plan.status == "scheduled" and plan.storylet_id:
-                events.append({"event_id": plan.storylet_id, "kind": "storylet", "status": "scheduled",
-                               "payload": {"reason": plan.reason}})
+            self._record_director(game_id, plan.director)
+            if plan.status != "not_required":
+                events.append({
+                    "event_id": plan.storylet_id or "no_event",
+                    "kind": "director",
+                    "status": plan.status,
+                    "payload": {
+                        "reason": plan.reason,
+                        "choice": plan.storylet_id,
+                        "source": getattr(plan.director, "source", "deterministic"),
+                        "director_reason": getattr(plan.director, "reason", ""),
+                        "based_on_version": state["state_version"],
+                    },
+                })
 
         changes.extend(action_rules.record_goal_progress(state))
         if ending_rules.maybe_make_eligible(state):
@@ -339,6 +376,7 @@ class Engine:
             "turn": self._turn_view(state),
             "state": self._public_state(state),
             "ending": None,
+            "suggestions": suggestion_rules.suggestions(state, active),
         }
         response["presentation"]["event_title"] = active.title if active else None
         response["presentation"]["event_badge"] = active is not None
@@ -412,6 +450,21 @@ class Engine:
             error=reply.error,
         )
 
+    def _record_director(self, game_id: str, choice: Any) -> None:
+        """记录导演调用指标（确定性打分不落库）。"""
+        if choice is None or not getattr(choice, "model", ""):
+            return
+        self.db.add_llm_call(
+            game_id=game_id,
+            purpose="director",
+            model=choice.model,
+            latency_ms=choice.latency_ms,
+            prompt_tokens=choice.prompt_tokens,
+            completion_tokens=choice.completion_tokens,
+            ok=getattr(choice, "source", "") == "llm",
+            error=getattr(choice, "error", ""),
+        )
+
     def _turn_view(self, state: dict[str, Any]) -> dict[str, Any]:
         return {
             "index": state["turn_index"],
@@ -476,6 +529,7 @@ class Engine:
             "turn": self._turn_view(state),
             "state": self._public_state(state),
             "ending": ending_block,
+            "suggestions": suggestion_rules.suggestions(state, storylet),
             "ui_hints": {
                 "dialogue_source": reply.source,
                 "meaningful": analysis.is_meaningful,

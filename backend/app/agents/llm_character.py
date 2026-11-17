@@ -34,9 +34,19 @@ LEAK_WORDS = (
 
 MAX_DIALOGUE_CHARS = 180
 
+# 明确的攻击性/赶人词：命中就重写一次；仍不改则退回模板（宁可平淡，也不能伤人）
+HARSH_WORDS = (
+    "滚", "烦不烦", "少管", "闭嘴", "烦死了", "关你什么事", "谁要你",
+    "有病", "别烦我", "你算老几", "要你管",
+)
+
 
 class LLMResponseError(Exception):
     pass
+
+
+def _is_harsh(dialogue: str) -> bool:
+    return any(word in dialogue for word in HARSH_WORDS)
 
 
 _CONTENT: Content | None = None
@@ -169,6 +179,7 @@ def llm_reply(
     started = time.monotonic()
     last_error = ""
     usage: dict[str, Any] = {}
+    tone_retried = False
 
     for attempt in range(1 + max(0, config.LLM_MAX_RETRIES)):
         try:
@@ -207,6 +218,27 @@ def llm_reply(
         except LLMResponseError as exc:
             last_error = str(exc)
             continue
+
+        # 语气兜底：刻薄/赶人的台词先要求重写一次
+        if _is_harsh(reply.dialogue):
+            if not tone_retried:
+                tone_retried = True
+                last_error = "too_harsh"
+                messages = messages + [
+                    {"role": "assistant", "content": str(raw)[:600]},
+                    {"role": "user",
+                     "content": "这句太冲、像在伤人。保持嘴硬和回避，但不要讽刺、贬低或赶人；"
+                                "同时给玩家留一个能接的话头。重写这一句，只输出 JSON。"},
+                ]
+                continue
+            soft = mock_character.reply(state, analysis, storylet, expected_ending)
+            soft.source = "fallback:too_harsh"
+            soft.error = "too_harsh"
+            soft.latency_ms = int((time.monotonic() - started) * 1000)
+            soft.model = config.LLM_MODEL
+            soft.prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
+            soft.completion_tokens = int(usage.get("completion_tokens", 0) or 0)
+            return soft
 
         reply.latency_ms = int((time.monotonic() - started) * 1000)
         reply.model = config.LLM_MODEL

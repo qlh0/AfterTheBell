@@ -18,24 +18,26 @@ _CLOSING_GOALS = {"clarify_misunderstanding", "discuss_class_change", "define_re
 
 
 def should_plan(state: dict[str, Any], reason: str) -> tuple[bool, str]:
-    """返回 (是否规划, 原因)。普通闲聊不触发，避免每轮多一次调用。"""
+    """返回 (是否规划, 原因)。
+
+    M2 把触发收紧：日常闲聊不规划，导演只在「事件刚收尾 / 主动推进 / 临近收尾 /
+    连续几轮没有事件」时介入，避免每轮多一次模型调用与额外等待。
+    """
     if state["ending_phase"] in ("prepared", "committed"):
-        if state["ending_phase"] == "prepared":
-            return False, "结局已进入准备阶段"
-        return False, "结局已提交"
+        return False, "结局已进入准备或提交阶段"
     if state["active_storylet"]:
         return False, "当前事件仍在进行"
     if state["scheduled_storylet"]:
         return False, "已有待触发事件"
     if state["ending_phase"] == "eligible":
         return True, "进入收束阶段"
-    if reason in ("fact_unlocked", "storylet_resolved", "advance"):
+    if reason in ("storylet_resolved", "advance"):
         return True, reason
     if gs.progress(state) >= int(state["budget"]["soft_end_at"]):
         return True, "接近结尾预算"
     last_plan = int(state.get("last_plan_turn", -1))
-    if state["turn_index"] - last_plan >= 2 and gs.progress(state) >= 2:
-        return True, "节奏推进"
+    if state["turn_index"] - last_plan >= 3 and gs.progress(state) >= 3:
+        return True, "连续几轮没有事件"
     return False, "节奏未到"
 
 

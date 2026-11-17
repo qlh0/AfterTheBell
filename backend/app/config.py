@@ -40,8 +40,10 @@ LLM_TIMEOUT_SECONDS = float(os.environ.get("LLM_TIMEOUT_SECONDS", "30"))
 LLM_MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "1"))
 LLM_MAX_OUTPUT_TOKENS = int(os.environ.get("LLM_MAX_OUTPUT_TOKENS", "400"))
 LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0.85"))
+LLM_DIRECTOR_TEMPERATURE = float(os.environ.get("LLM_DIRECTOR_TEMPERATURE", "0.4"))
+LLM_DIRECTOR_MAX_TOKENS = int(os.environ.get("LLM_DIRECTOR_MAX_TOKENS", "220"))
 
-DIRECTOR_ENABLED = os.environ.get("ATB_DIRECTOR", "0").strip() == "1"
+DIRECTOR_ENABLED = os.environ.get("ATB_DIRECTOR", "1").strip() == "1"
 
 DEFAULT_MEANINGFUL_TURN_BUDGET = int(os.environ.get("ATB_TURN_BUDGET", "12"))
 

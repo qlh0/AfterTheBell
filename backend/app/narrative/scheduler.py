@@ -29,6 +29,7 @@ class PlanResult:
     status: str  # scheduled | skipped | not_required
     storylet_id: str | None
     reason: str
+    director: Any = None  # DirectorChoice（记录导演决策与指标，便于调试）
 
 
 def _mark_used(state: dict[str, Any], storylet_id: str) -> None:
@@ -89,7 +90,17 @@ def try_activate(state: dict[str, Any], library: StoryletLibrary) -> Activation 
     return None
 
 
-def plan_next(state: dict[str, Any], library: StoryletLibrary, reason: str) -> PlanResult:
+def plan_next(
+    state: dict[str, Any],
+    library: StoryletLibrary,
+    reason: str,
+    chooser: Any = None,
+) -> PlanResult:
+    """决定下一个事件。
+
+    `chooser(state, eligible)` 可选：M2 传入 LLM 导演；返回 None 表示"导演没给出
+    决定"，则退回确定性打分。返回 DirectorChoice 时，no_event 也是合法决定。
+    """
     ok, why = director.should_plan(state, reason)
     if not ok:
         return PlanResult(status="not_required", storylet_id=None, reason=why)
@@ -99,18 +110,30 @@ def plan_next(state: dict[str, Any], library: StoryletLibrary, reason: str) -> P
         return PlanResult(status="skipped", storylet_id=None, reason="没有满足条件的候选事件")
 
     snapshot_version = state["state_version"]
-    chosen = director.propose(state, eligible)
-    if chosen is None:
-        return PlanResult(status="skipped", storylet_id=None, reason="导演选择 no_event")
+    choice = None
+    chosen_id: str | None = None
+
+    if chooser is not None:
+        choice = chooser(state, eligible)
+        if choice is not None:
+            chosen_id = choice.storylet_id
+    if choice is None:
+        chosen = director.propose(state, eligible)
+        chosen_id = chosen.id if chosen else None
+
+    # 无论选没选，都记下这次规划回合，避免连续追问导演
+    state["last_plan_turn"] = state["turn_index"]
+
+    if chosen_id is None:
+        return PlanResult(status="skipped", storylet_id=None, reason="导演选择 no_event", director=choice)
 
     # 提交前复核：候选仍合法、且基于同一状态版本
-    if not library.is_still_eligible(chosen.id, state) or snapshot_version != state["state_version"]:
-        return PlanResult(status="skipped", storylet_id=None, reason="候选在提交前失效")
+    if not library.is_still_eligible(chosen_id, state) or snapshot_version != state["state_version"]:
+        return PlanResult(status="skipped", storylet_id=None, reason="候选在提交前失效", director=choice)
 
-    state["scheduled_storylet"] = chosen.id
+    state["scheduled_storylet"] = chosen_id
     state["scheduled_at_version"] = snapshot_version
-    state["last_plan_turn"] = state["turn_index"]
-    return PlanResult(status="scheduled", storylet_id=chosen.id, reason=why)
+    return PlanResult(status="scheduled", storylet_id=chosen_id, reason=why, director=choice)
 
 
 def clear_active(state: dict[str, Any]) -> None:

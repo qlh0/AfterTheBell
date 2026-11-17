@@ -27,6 +27,8 @@ default displayed_sprite = None
 default current_event_title = None
 default chat_log = []
 default input_text = ""
+default suggestions = []
+default log_expanded = False
 default ending_data = None
 default backend_ok = False
 default backend_error = ""
@@ -51,12 +53,13 @@ label selfcheck:
         $ atb_selfcheck_note("send_err=%r turn=%d version=%d" % (_err, turn_index, state_version))
         $ _err = atb_advance()
         $ atb_selfcheck_note("advance_err=%r scene=%s sprite=%s" % (_err, scene_id, sprite_id))
-    $ atb_selfcheck_note("chat_log=%d" % len(chat_log))
+    $ atb_selfcheck_note("chat_log=%d suggestions=%d" % (len(chat_log), len(suggestions)))
     $ atb_render_scene(transition=False)
     $ _res = renpy.call_screen("chat_ui")
     $ atb_selfcheck_note("screen_ok res=%r" % (_res,))
     $ _demo_ending = {"id": "romance", "title": "测试结局", "subtitle": "SELF CHECK",
                       "epilogue": ["第一行测试文本。", "第二行测试文本。"], "closing_line": "——测试用结尾。"}
+    $ atb_selfcheck_note("ending_begin")
     $ _ending_res = renpy.call_screen("ending_view", _demo_ending)
     $ atb_selfcheck_note("ending_screen_ok res=%r" % (_ending_res,))
     $ selfcheck_mode = False
@@ -68,6 +71,8 @@ label start:
     $ quick_menu = False
     $ chat_log = []
     $ input_text = ""
+    $ suggestions = []
+    $ log_expanded = False
     $ ending_data = None
     $ displayed_scene = None
     $ displayed_sprite = None

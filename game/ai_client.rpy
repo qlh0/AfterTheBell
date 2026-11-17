@@ -76,6 +76,7 @@ init -10 python:
             atb_append("narrator", line)
         atb_append("xuzhi", data.get("dialogue", ""))
         atb_apply_presentation(data["presentation"])
+        store.suggestions = data.get("suggestions", []) or []
         return None
 
     def atb_consume(data):
@@ -86,6 +87,7 @@ init -10 python:
         if data.get("dialogue"):
             atb_append("xuzhi", data["dialogue"])
         atb_apply_presentation(data["presentation"])
+        store.suggestions = data.get("suggestions", []) or []
         if data.get("ending"):
             store.ending_data = data["ending"]
 
@@ -125,6 +127,7 @@ init -10 python:
         for line in data.get("narration", []):
             atb_append("narrator", line)
         atb_apply_presentation(data["presentation"])
+        store.suggestions = data.get("suggestions", []) or []
         return None
 
     def atb_sync():

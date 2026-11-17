@@ -42,7 +42,7 @@ def test_interact_contract(client):
     data = resp.json()
     for key in ("game_id", "request_id", "state_version", "speaker", "dialogue",
                 "emotion", "presentation", "committed_changes", "active_event_id",
-                "can_advance", "planning_status", "turn", "state"):
+                "can_advance", "planning_status", "turn", "state", "suggestions"):
         assert key in data, key
     assert data["speaker"] == "xuzhi"
     assert data["dialogue"]

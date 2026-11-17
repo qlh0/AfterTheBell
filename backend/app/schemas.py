@@ -66,6 +66,14 @@ class EndingBlock(BaseModel):
     closing_line: str = ""
 
 
+class Suggestion(BaseModel):
+    """「可以这么说」提示：只是可编辑的参考句，不是强制选项。"""
+
+    id: str
+    label: str
+    text: str
+
+
 class StartRequest(BaseModel):
     player_name: str | None = Field(default=None, max_length=16)
 
@@ -78,6 +86,7 @@ class StartResponse(BaseModel):
     emotion: str = "guarded"
     presentation: Presentation = Field(default_factory=Presentation)
     state: PublicState = Field(default_factory=PublicState)
+    suggestions: list[Suggestion] = Field(default_factory=list)
 
 
 class InteractRequest(BaseModel):
@@ -117,6 +126,7 @@ class InteractResponse(BaseModel):
     turn: TurnView = Field(default_factory=TurnView)
     state: PublicState = Field(default_factory=PublicState)
     ending: EndingBlock | None = None
+    suggestions: list[Suggestion] = Field(default_factory=list)
     ui_hints: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -132,6 +142,7 @@ class AdvanceResponse(BaseModel):
     turn: TurnView = Field(default_factory=TurnView)
     state: PublicState = Field(default_factory=PublicState)
     ending: EndingBlock | None = None
+    suggestions: list[Suggestion] = Field(default_factory=list)
 
 
 class ErrorResponse(BaseModel):
