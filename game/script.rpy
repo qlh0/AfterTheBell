@@ -50,6 +50,10 @@ label selfcheck:
     $ atb_selfcheck_note("start_err=%r" % (_err,))
     if _err is None:
         $ atb_selfcheck_note("game_id=%s" % game_id)
+        $ atb_render_scene(transition=False)
+        $ selfcheck_shot_name = "chat_start"
+        $ _res_start = renpy.call_screen("chat_ui")
+        $ atb_selfcheck_note("start_screen_ok res=%r" % (_res_start,))
         $ _err = atb_send("你最近是不是在躲我？")
         $ atb_selfcheck_note("send_err=%r turn=%d version=%d" % (_err, turn_index, state_version))
         $ _err = atb_advance()

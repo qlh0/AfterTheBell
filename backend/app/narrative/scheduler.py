@@ -22,6 +22,7 @@ class Activation:
     storylet: Storylet
     cue: str
     how: str  # "scheduled" | "finale"
+    exposition: tuple[str, ...] = ()
 
 
 @dataclass
@@ -51,7 +52,12 @@ def _activate(state: dict[str, Any], storylet: Storylet, how: str) -> Activation
         state["facts"]["chenyu_hint_seen"] = True
     if storylet.kind == "finale":
         endings_rules.prepare(state)
-    return Activation(storylet=storylet, cue=storylet.opening_cue, how=how)
+    return Activation(
+        storylet=storylet,
+        cue=storylet.opening_cue,
+        how=how,
+        exposition=storylet.exposition,
+    )
 
 
 def try_activate(state: dict[str, Any], library: StoryletLibrary) -> Activation | None:

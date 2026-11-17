@@ -23,9 +23,9 @@ from .rules import endings as ending_rules
 from .rules import meaningful_turn, storylet_resolution, suggestions as suggestion_rules
 
 OPENING_NARRATION = [
-    "放学铃响过二十分钟，教室里只剩下你们两个。",
-    "窗外的操场已经空了，最后一排的椅子被值日生摞在墙角。",
-    "她把桌上那张对折的纸往课本下面推了推，抬头看你。",
+    "放学铃响过二十分钟，教室里只剩下你们两个。这一周她回消息一直很慢，放学也总是先走——你还没找到机会问她。",
+    "收书包时，她把桌角一张对折的纸压到课本最下面。你瞥见抬头印着「分班意向表」。",
+    "你想起前几天在走廊，你随口跟陈屿说过一句「高中谈恋爱很麻烦」——当时她好像就在旁边。",
 ]
 OPENING_LINE = "「你怎么还在？」"
 
@@ -106,6 +106,7 @@ class Engine:
         if config.STORYLETS_ENABLED:
             activation = scheduler.try_activate(state, self.content.storylets)
         if activation is not None:
+            narration.extend(activation.exposition)
             narration.append(activation.cue)
             changes.append({
                 "path": "active_storylet",
@@ -348,6 +349,7 @@ class Engine:
             activation = scheduler.try_activate(state, self.content.storylets)
         planning_status = "not_required"
         if activation is not None:
+            narration.extend(activation.exposition)
             narration.append(activation.cue)
             changes.append({"path": "active_storylet", "before": None,
                             "after": activation.storylet.id, "reason": f"activated:{activation.how}"})

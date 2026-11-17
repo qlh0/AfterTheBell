@@ -103,6 +103,42 @@ def test_disabled_storylets_still_reach_an_ending(engine, monkeypatch):
     assert any(e["event_id"] == "forced_finale" for e in events)
 
 
+# ---------------- 背景交代（玩家不该靠猜） ----------------
+
+def test_opening_explains_background(engine):
+    start = engine.start()
+    joined = "".join(start["narration"])
+    assert "回消息" in joined, "开场要交代她最近的疏远"
+    assert "分班意向表" in joined, "开场要让玩家看到分班表这条线索"
+    assert "高中谈恋爱很麻烦" in joined, "开场要交代玩家说过的那句话"
+
+
+def test_storylets_carry_exposition(content):
+    late = content.storylets.get("late_explanation")
+    klass = content.storylets.get("class_choice")
+    assert late is not None and late.exposition, "「那句话」事件要自带背景旁白"
+    assert any("高中谈恋爱很麻烦" in line for line in late.exposition + (late.opening_cue,))
+    assert klass is not None and klass.exposition, "分班事件要自带背景旁白"
+
+
+def test_exposition_is_shown_when_event_activates(engine, monkeypatch):
+    """事件激活时，背景旁白要一起进入 narration。"""
+    from app.narrative import scheduler as sched
+
+    start = engine.start()
+    gid = start["game_id"]
+    state = engine.db.load_state(gid)
+    state["scheduled_storylet"] = "late_explanation"
+    state["facts"]["misunderstanding_discussed"] = True
+    state["meaningful_turns"] = 4
+    state["state_version"] = 3
+    engine.db.save_state(state, snapshot=False)
+
+    data = engine.interact(gid, "我那天真的不是在说你。", "req_expo_0000001")
+    assert any("高中谈恋爱很麻烦" in line for line in data["narration"])
+    assert data["active_event_id"] == "late_explanation"
+
+
 # ---------------- 指标不影响玩家可见层 ----------------
 
 def test_metrics_are_not_leaked_to_player(engine):

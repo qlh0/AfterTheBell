@@ -88,7 +88,10 @@
           {"gte": ["relationship.trust", 38]}
         ]
       },
-      "opening_cue": "她停了很久，忽然提起那天她其实就在旁边，听见了那句话。",
+      "opening_cue": "她停了很久，忽然提起前几天在走廊，你跟陈屿说的那句「高中谈恋爱很麻烦」——她说她当时就站在旁边，全听见了。",
+      "exposition": [
+        "你当时只是随口抱怨陈屿他们班的八卦，并不是在说许栀。"
+      ],
       "narrative_hint": "把误解摆上桌。结果不预设：可以澄清、可以只解开一半、也可以谈得更僵。她不会因为一句解释就立刻完全相信。",
       "possible_outcomes": ["clarified", "partially_clarified", "worse"],
       "once": true,
@@ -112,7 +115,10 @@
           ]}
         ]
       },
-      "opening_cue": "桌角那张对折的纸被她按住，她没有收起来，也没有打开。",
+      "opening_cue": "她把那张对折的分班意向表按住了，没有收起来，也没有打开。",
+      "exposition": [
+        "那张表就是刚才她往课本底下压的那张，抬头印着「分班意向表」。"
+      ],
       "narrative_hint": "谈分班与之后怎么相处。她会说清这是自己的决定；玩家可以支持、可以不安，但不能替她决定。",
       "possible_outcomes": ["discussed_respectfully", "conflict_emerged", "topic_avoided"],
       "once": true,

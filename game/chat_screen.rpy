@@ -34,7 +34,7 @@ style log_button_text is button_text:
 
 screen chat_entry(item):
     if item["who"] == "narrator":
-        text item["text"] size 16 color "#93a1b8" italic True
+        text item["text"] size 19 color "#b3c0d2"
     elif item["who"] == "xuzhi":
         text ("{color=#f2c9a2}许栀{/color}  " + item["text"]) size 19 color "#eaeff8"
     else:
@@ -83,7 +83,7 @@ screen chat_ui():
             background Solid("#0a0e16f0")
             xfill True
             yalign 1.0
-            ysize 306
+            ysize 322
             padding (24, 12)
 
             vbox:
@@ -95,17 +95,41 @@ screen chat_ui():
                     if store.current_event_title:
                         text "- [current_event_title]" size 14 color "#93a1b8" yalign 0.5
                     null width 1
-                    text "第[turn_index]回合" size 12 color "#6f7d94" yalign 0.6
+                    text ("序章" if store.turn_index == 0 else "第%d回合" % store.turn_index):
+                        size 12
+                        color "#6f7d94"
+                        yalign 0.6
 
-                viewport:
-                    ysize 124
-                    mousewheel True
-                    draggable True
-                    yinitial 1.0
+                fixed:
+                    xfill True
+                    ysize 140
+
+                    viewport:
+                        ysize 140
+                        mousewheel True
+                        draggable True
+                        yinitial 1.0
+                        vbox:
+                            spacing 9
+                            for item in store.chat_log[-6:]:
+                                use chat_entry(item)
+
+                    ## 顶部渐隐：只露出一半的旧消息自然淡出，不显得被切断
                     vbox:
-                        spacing 9
-                        for item in store.chat_log[-6:]:
-                            use chat_entry(item)
+                        xsize 1232
+                        spacing 0
+                        add Solid("#0a0e16ee"):
+                            xsize 1232
+                            ysize 5
+                        add Solid("#0a0e16c4"):
+                            xsize 1232
+                            ysize 5
+                        add Solid("#0a0e1690"):
+                            xsize 1232
+                            ysize 5
+                        add Solid("#0a0e1658"):
+                            xsize 1232
+                            ysize 5
 
                 if store.suggestions:
                     hbox:

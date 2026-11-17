@@ -56,7 +56,7 @@ Esc 打开存档菜单。
 | 协议 | `POST /game/start`、`GET /game/{id}/state`、`POST /game/{id}/interact`、`POST /game/{id}/advance`、`GET /game/{id}/events`、`POST /game/{id}/restore/{version}` |
 | 规则 | 前置条件 DSL、6 个 Storylet + 校门口 finale、4 个叙事目标、`eligible → prepared → committed` 结局状态机 |
 | 存储 | SQLite：权威状态、逐版本快照、`request_id` 幂等、回合流水、事件日志、记忆、LLM 指标 |
-| 测试 | **67 项 pytest**：三路线结局、幂等、版本冲突、无泄露、数值上限、LLM 解析/校验/兜底、导演决策/失效、建议回复、刻薄重写、指标分位、沉默/刷屏收束、消融开关 |
+| 测试 | **70 项 pytest**：三路线结局、幂等、版本冲突、无泄露、数值上限、LLM 解析/校验/兜底、导演决策/失效、建议回复、刻薄重写、指标分位、沉默/刷屏收束、消融开关、背景旁白 |
 
 **设计红线（M1/M2 依然成立）**
 
@@ -115,7 +115,12 @@ Prompt 里明确要求：**先接住玩家这句话**，再让事件自然发生
 ### 3.4 UI
 
 - 女主站在画面正中；角色对白、旁白、建议回复、输入框、按钮全部在下方。
+- **旁白**：19px、不倾斜、浅冷色 `#b3c0d2`，与对白同字号但一眼能区分；聊天记录顶部有渐隐，旧消息不会露出半行字。
 - 右上角「聊天记录 (N)」按钮 → 从右侧展开记录抽屉（不遮挡人物）；点「收起」恢复输入。
+- **背景交代**：开场三句旁白交代「她最近疏远 / 桌上的分班意向表 / 玩家说过的那句话」；
+  关键事件激活时还会先播一句背景（`storylets.json` 的 `exposition`），玩家不用靠猜。
+
+![开场：背景交代在聊天记录里](docs/ui_chat_start.jpg)
 
 ### 3.5 指标与消融
 
@@ -197,6 +202,8 @@ AfterTheBell/
 | 许栀的人设、她知道/不知道什么 | `content/characters.json` |
 | 对白的口吻规则、禁止项 | `content/prompts/character_system.txt` + `backend/app/agents/prompts.py` |
 | 加/删事件、改触发条件 | `content/storylets.json`（DSL 见下） |
+| 事件的背景旁白 | `content/storylets.json` 的 `exposition` 数组 |
+| 开场旁白 | `backend/app/engine.py` 的 `OPENING_NARRATION` |
 | 事件每个走向的效果 | `backend/app/rules/storylet_resolution.py` 的 `OUTCOMES` 表 |
 | 结局门槛与结局文本 | `content/endings.json` |
 | 节奏（有效互动预算） | `content/narrative_goals.json` 的 `pacing` |
