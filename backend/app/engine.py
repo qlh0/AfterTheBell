@@ -21,6 +21,7 @@ from .narrative import director_llm, scheduler
 from .rules import actions as action_rules
 from .rules import endings as ending_rules
 from .rules import meaningful_turn, storylet_resolution, suggestions as suggestion_rules
+from .rules import storylet_progress as progress_rules
 
 OPENING_NARRATION = [
     "放学铃响过二十分钟，教室里只剩下你们两个。这一周她回消息一直很慢，放学也总是先走——你还没找到机会问她。",
@@ -138,32 +139,42 @@ class Engine:
             narration.append(reply.beat)
 
         # 4. 提交动作（白名单 + 每回合上限）
-        #    玩家意图以规则解析为准；模型的动作提议只作记录，不能替玩家表态。
+        #    规则动作优先；模型只能补充低风险动作（care / small_talk 等）。
+        final_actions, action_notes = meaningful_turn.resolve_actions(analysis, reply.actions)
         action_changes, notes = action_rules.commit_actions(
-            state, analysis.actions, reason=f"turn:{state['turn_index']}"
+            state, final_actions, reason=f"turn:{state['turn_index']}", analysis=analysis
         )
-        if reply.actions and set(reply.actions) != set(analysis.actions):
-            notes.append("llm_actions:" + ",".join(sorted(reply.actions)))
+        notes.extend(action_notes)
         if reply.notes:
             notes.extend(reply.notes)
         changes.extend(action_changes)
 
-        # 5. 事件收尾：结果依据本回合实际互动
+        # 5. 事件推进：证据足够才结算；否则等待 / 超时放弃（绝不默认成功）
         ending_block: dict[str, Any] | None = None
         resolved_id: str | None = None
         if active is not None:
-            started = state.get("storylet_started_turn") or state["turn_index"]
+            resolved_set = state.setdefault("resolved_storylets", [])
+            progress_rules.update_evidence(state, active, analysis, reply.actions)
+            state["storylet_turns"] = int(state.get("storylet_turns", 0)) + 1
+
             if active.kind == "finale":
-                if analysis.is_meaningful or (state["turn_index"] + 1) >= int(state["budget"]["hard_end_at"]):
+                ev = progress_rules.evaluate(state, active, analysis)
+                if ev.outcome and active.id not in resolved_set:
                     resolution = ending_rules.resolve(state, self.content)
                     changes.extend(resolution.changes)
                     ending_block = ending_rules.ending_block(state, self.content)
                     resolved_id = active.id
+                    resolved_set.append(active.id)
                     events.append({
                         "event_id": active.id,
                         "kind": "storylet",
                         "status": "resolved",
-                        "payload": {"ending": state["ending_id"], "failed_goals": resolution.failed_goals},
+                        "payload": {
+                            "ending": state["ending_id"],
+                            "failed_goals": resolution.failed_goals,
+                            "reason": ev.reason,
+                            "evidence": ev.evidence or state.get("storylet_evidence", {}),
+                        },
                     })
                     memories.append({
                         "kind": "ending",
@@ -171,31 +182,60 @@ class Engine:
                         "importance": 5,
                         "tags": ["ending", state.get("ending_id") or ""],
                     })
-            elif analysis.is_meaningful or (state["turn_index"] - started) >= 2:
-                resolution = storylet_resolution.resolve(
-                    state, active, analysis, reply.storylet_outcome
-                )
-                if resolution is not None:
-                    changes.extend(resolution.changes)
-                    narration.extend(resolution.narration)
-                    scheduler.clear_active(state)
-                    resolved_id = active.id
+                else:
+                    state["storylet_stage"] = "interacting"
                     events.append({
-                        "event_id": active.id,
-                        "kind": "storylet",
-                        "status": "resolved",
-                        "payload": {
-                            "outcome": resolution.outcome,
-                            "proposed_outcome": reply.storylet_outcome,
-                        },
+                        "event_id": active.id, "kind": "storylet", "status": "pending",
+                        "payload": {"reason": ev.reason, "evidence": state.get("storylet_evidence", {})},
                     })
-                    if resolution.memory is not None:
-                        kind, content, importance, tags = resolution.memory
-                        memories.append({
-                            "kind": kind,
-                            "content": content,
-                            "importance": importance,
-                            "tags": tags,
+            else:
+                ev = progress_rules.evaluate(state, active, analysis)
+                if ev.outcome and active.id not in resolved_set:
+                    resolution = storylet_resolution.resolve(state, active, analysis, ev.outcome)
+                    if resolution is not None:
+                        changes.extend(resolution.changes)
+                        narration.extend(resolution.narration)
+                        scheduler.clear_active(state)
+                        resolved_id = active.id
+                        resolved_set.append(active.id)
+                        events.append({
+                            "event_id": active.id,
+                            "kind": "storylet",
+                            "status": "resolved",
+                            "payload": {
+                                "outcome": resolution.outcome,
+                                "proposed_outcome": reply.storylet_outcome,
+                                "reason": ev.reason,
+                                "evidence": dict(state.get("storylet_evidence", {})),
+                            },
+                        })
+                        if resolution.memory is not None:
+                            kind, content, importance, tags = resolution.memory
+                            memories.append({
+                                "kind": kind,
+                                "content": content,
+                                "importance": importance,
+                                "tags": tags,
+                            })
+                else:
+                    abandon, why = progress_rules.should_abandon(state, active)
+                    if abandon:
+                        state.setdefault("abandoned_storylets", []).append({
+                            "id": active.id,
+                            "reason": why,
+                            "turn": state["turn_index"],
+                        })
+                        scheduler.clear_active(state)
+                        narration.append("她没再继续这个话题。")
+                        events.append({
+                            "event_id": active.id, "kind": "storylet", "status": "abandoned",
+                            "payload": {"reason": why, "evidence": state.get("storylet_evidence", {})},
+                        })
+                    else:
+                        state["storylet_stage"] = "interacting"
+                        events.append({
+                            "event_id": active.id, "kind": "storylet", "status": "pending",
+                            "payload": {"reason": ev.reason, "evidence": state.get("storylet_evidence", {})},
                         })
 
         # 6. 回合计数

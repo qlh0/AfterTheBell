@@ -13,6 +13,7 @@ from typing import Any
 
 from .. import game_state as gs
 from ..rules import endings as endings_rules
+from ..rules.storylet_progress import initial_evidence
 from . import director
 from .storylets import Storylet, StoryletLibrary
 
@@ -42,6 +43,9 @@ def _mark_used(state: dict[str, Any], storylet_id: str) -> None:
 def _activate(state: dict[str, Any], storylet: Storylet, how: str) -> Activation:
     state["active_storylet"] = storylet.id
     state["storylet_started_turn"] = state["turn_index"]
+    state["storylet_stage"] = "active"
+    state["storylet_evidence"] = initial_evidence(storylet)
+    state["storylet_turns"] = 0
     state["scheduled_storylet"] = None
     state["scheduled_at_version"] = None
     _mark_used(state, storylet.id)
@@ -145,3 +149,5 @@ def plan_next(
 def clear_active(state: dict[str, Any]) -> None:
     state["active_storylet"] = None
     state["storylet_started_turn"] = None
+    state["storylet_stage"] = "none"
+    state["storylet_turns"] = 0

@@ -22,7 +22,7 @@ from ..db import Database
 from ..memory import store as memory_store
 from ..narrative.storylets import Storylet
 from ..rules.actions import ACTIONS
-from ..rules.meaningful_turn import Analysis
+from ..rules.meaningful_turn import MODEL_ADDABLE, Analysis
 from . import mock_character, prompts
 from .mock_character import AgentReply
 
@@ -134,10 +134,10 @@ def _validate(
         proposed = []
     proposed = [a for a in proposed if isinstance(a, str)]
     known = [a for a in proposed if a in ACTIONS]
-    # 只有玩家这句话真的做了这件事，才接受模型提议的动作；
-    # small_talk 无副作用，允许模型自由使用（仍受每回合上限约束）。
-    accepted = [a for a in known if a in set(analysis.actions) or a == "small_talk"][:3]
-    rejected = [a for a in known if a not in set(analysis.actions) and a != "small_talk"]
+    # 高影响动作必须由规则解析确认；模型只能补低风险动作。
+    allowed = set(analysis.actions) | set(MODEL_ADDABLE)
+    accepted = [a for a in known if a in allowed and a not in analysis.rejected_actions][:3]
+    rejected = [a for a in known if a not in allowed]
 
     outcome = parsed.get("storylet_outcome")
     if storylet is None or not isinstance(outcome, str) or outcome not in storylet.possible_outcomes:

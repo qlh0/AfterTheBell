@@ -45,17 +45,33 @@ ACTIONS: dict[str, dict[str, Any]] = {
     "support_autonomy": {
         "label": "支持她自己的选择",
         "relationship": {"respect_for_autonomy": 4, "trust": 2},
-        "facts": ["class_change_discussed"],
+        # v0.3：class_change_discussed 只能由「真的谈过分班计划与未来」的事件结算写入
+        "facts": [],
     },
     "control_autonomy": {
         "label": "替她做决定",
         "relationship": {"respect_for_autonomy": -7, "trust": -3},
-        "facts": ["player_controlling", "class_change_discussed"],
+        "facts": ["player_controlling"],
     },
     "express_romance": {
         "label": "明确表达心意",
         "relationship": {"affection": 4},
         "facts": ["player_expressed_romance"],
+    },
+    "reject_romance": {
+        "label": "否认或拒绝恋爱",
+        "relationship": {"affection": -2, "trust": 1},
+        "facts": ["player_declined_romance"],
+    },
+    "choose_friends": {
+        "label": "选择继续做朋友",
+        "relationship": {"affection": -1, "trust": 2},
+        "facts": ["player_chose_friends", "player_declined_romance"],
+    },
+    "discuss_class_future": {
+        "label": "谈分班计划与之后的相处",
+        "relationship": {"respect_for_autonomy": 2, "trust": 1},
+        "facts": ["class_change_discussed"],
     },
     "promise": {
         "label": "给出承诺",
@@ -79,12 +95,17 @@ PER_TURN_CAP = 9
 
 
 def commit_actions(
-    state: dict[str, Any], actions: list[str], reason: str = ""
+    state: dict[str, Any], actions: list[str], reason: str = "", analysis: Any = None
 ) -> tuple[list[dict[str, Any]], list[str]]:
-    """按白名单提交动作效果，返回 (changes, notes)。"""
+    """按白名单提交动作效果，返回 (changes, notes)。
+
+    v0.3：事实提交要过「证据闸门」——例如 support_autonomy 只有在同一句里
+    真的谈到分班，才允许把 class_change_discussed 置真。
+    """
     notes: list[str] = []
     totals: dict[str, int] = {}
     facts: list[str] = []
+    topics = getattr(analysis, "topics", set()) if analysis is not None else set()
 
     for action in dict.fromkeys(actions):  # 去重保序
         spec = ACTIONS.get(action)
@@ -94,6 +115,9 @@ def commit_actions(
         for field, amount in spec.get("relationship", {}).items():
             totals[field] = totals.get(field, 0) + int(amount)
         for fact in spec.get("facts", []):
+            if fact == "class_change_discussed" and "class_change" not in topics:
+                notes.append("fact_blocked:class_change_discussed(no_class_topic)")
+                continue
             facts.append(fact)
 
     capped = {k: max(-PER_TURN_CAP, min(PER_TURN_CAP, v)) for k, v in totals.items()}

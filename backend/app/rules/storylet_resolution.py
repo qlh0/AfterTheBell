@@ -126,15 +126,54 @@ OUTCOMES: dict[str, dict[str, dict[str, Any]]] = {
         },
         "walked_apart": {
             "rel": {"affection": -1},
-            "facts": ["walk_home_done"],
+            # v0.3：没有真正同行，就不能写 walk_home_done
             "narr": ["她站在路灯下没动，等你走出几步才转身。"],
-            "mem": ("episode", "放学时玩家先走了，没有一起走。", 3, ["walk_home"]),
+            "mem": ("episode", "放学时没有一起走。", 3, ["walk_home"]),
         },
         "declined": {
             "rel": {"affection": -1},
-            "facts": ["walk_home_done"],
             "narr": ["她点点头，没再多说。"],
             "mem": ("episode", "她拒绝了同行。", 2, ["walk_home"]),
+        },
+    },
+    "shared_memory": {
+        "shared_warmth": {
+            "rel": {"trust": 2, "affection": 3},
+            "narr": ["她说着说着，自己先笑了。"],
+            "mem": ("episode", "两人一起翻起以前的事，气氛变暖。", 4, ["shared_memory"]),
+        },
+        "different_understanding": {
+            "rel": {"trust": 1},
+            "narr": ["同一件事，她记住的和你记住的不太一样。"],
+            "mem": ("episode", "同一段记忆，两人的理解不同。", 3, ["shared_memory"]),
+        },
+        "memory_avoided": {
+            "rel": {},
+            "narr": ["她把话题轻轻带过去了。"],
+            "mem": ("episode", "共同的记忆没有被接住。", 2, ["shared_memory"]),
+        },
+    },
+    "unfinished_conversation": {
+        "repaired": {
+            "rel": {"trust": 4, "affection": 2},
+            "facts": ["misunderstanding_resolved"],
+            "narr": ["这一次她没有把话咽回去。"],
+            "mem": ("promise", "两人把没说完的话说开了一些。", 5, ["unfinished"]),
+        },
+        "partially_understood": {
+            "rel": {"trust": 2},
+            "narr": ["她听完，点了点头，又停在那里。"],
+            "mem": ("episode", "感受说出来了，但还没完全和解。", 4, ["unfinished"]),
+        },
+        "worsened": {
+            "rel": {"respect_for_autonomy": -3, "trust": -2},
+            "narr": ["她把脸别开，不想再继续这个话题。"],
+            "mem": ("conflict", "又一次把话谈僵了。", 4, ["unfinished"]),
+        },
+        "avoided": {
+            "rel": {},
+            "narr": ["两个人都没有再往下说。"],
+            "mem": ("episode", "没说完的话还是没说完。", 2, ["unfinished"]),
         },
     },
 }
@@ -144,13 +183,12 @@ def resolve(
     state: dict[str, Any],
     storylet: Storylet,
     analysis: Analysis,
-    proposed_outcome: str | None = None,
+    outcome: str | None = None,
 ) -> Resolution | None:
     """finale 由结局引擎处理，这里返回 None 表示跳过。
 
-    M1 起事件结果仍由规则判定：模型提议的 outcome 只在等于规则判定时被视为
-    "一致"，否则忽略（它会作为调试信息写进事件日志）。这样可以避免模型把
-    「玩家已经解释清楚」随手判成「只说开了一半」，让结局不可达。
+    v0.3：事件结果由 `storylet_progress.evaluate()` 依据累积证据判定后传入；
+    未传入时才退回旧的确定性默认值（保持 Mock/测试兼容）。
     """
     if storylet.kind == "finale":
         return None
@@ -159,15 +197,13 @@ def resolve(
     if not table:
         return Resolution(outcome=storylet.possible_outcomes[0] if storylet.possible_outcomes else "resolved")
 
-    fallback = default_outcome(storylet, analysis)
-    if fallback not in table:
-        fallback = next(iter(table))
+    chosen = outcome if outcome in table else default_outcome(storylet, analysis)
+    if chosen not in table:
+        chosen = next(iter(table))
 
-    outcome = fallback  # 规则优先；proposed_outcome 仅用于日志/调试（见函数说明）
-
-    spec = table[outcome]
-    changes = gs.apply_relationship_delta(state, spec.get("rel", {}), f"{storylet.id}:{outcome}")
-    changes += gs.apply_fact_changes(state, spec.get("facts", []), f"{storylet.id}:{outcome}")
+    spec = table[chosen]
+    changes = gs.apply_relationship_delta(state, spec.get("rel", {}), f"{storylet.id}:{chosen}")
+    changes += gs.apply_fact_changes(state, spec.get("facts", []), f"{storylet.id}:{chosen}")
 
     mem = spec.get("mem")
     memory = None
@@ -176,7 +212,7 @@ def resolve(
         memory = (kind, content, importance, tags)
 
     return Resolution(
-        outcome=outcome,
+        outcome=chosen,
         changes=changes,
         narration=list(spec.get("narr", [])),
         memory=memory,
