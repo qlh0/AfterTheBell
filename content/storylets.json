@@ -109,9 +109,10 @@
         "all": [
           {"eq": ["ending_phase", "none"]},
           {"falsy": ["active_storylet"]},
+          {"flag": ["facts.class_change_discussed", false]},
           {"any": [
             {"flag": ["facts.player_knows_class_change", true]},
-            {"gte": ["meaningful_turns", 6]}
+            {"gte": ["meaningful_turns", 3]}
           ]}
         ]
       },
@@ -189,14 +190,27 @@
           {"eq": ["ending_phase", "none"]},
           {"falsy": ["active_storylet"]},
           {"gte": ["meaningful_turns", 3]},
+          {"flag": ["facts.player_mentioned_memory", true]},
           {"any": [
             {"flag": ["facts.old_note_seen", true]},
             {"flag": ["facts.walk_home_done", true]}
           ]}
         ]
       },
-      "opening_cue": "她忽然提起以前的一件小事，语气很轻，像在确认你还记不记得。",
-      "exposition": ["她说的那件事，你们确实一起经历过。"],
+      "opening_cue": "她提起以前的事，语气很轻，像在确认你还记不记得。",
+      "exposition": [],
+      "variants": [
+        {
+          "when": {"flag": ["facts.old_note_seen", true]},
+          "cue": "她伸手把那张旧便签从书里抽出来，摊在桌上：「你还记得这个吧。」",
+          "exposition": ["那张便签是你们以前上课传的，上面还有你那时的字。"]
+        },
+        {
+          "when": {"flag": ["facts.walk_home_done", true]},
+          "cue": "她提起上次一起走的那段路：「那天你走得特别慢，还记得吗。」",
+          "exposition": ["上次你们确实一起走了一段，从校门口到路口。"]
+        }
+      ],
       "narrative_hint": "用真实的共同记忆做情感铺垫，不凭空发明过去，也不靠突然告白推进。",
       "possible_outcomes": ["shared_warmth", "different_understanding", "memory_avoided"],
       "once": true,

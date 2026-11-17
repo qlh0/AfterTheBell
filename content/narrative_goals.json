@@ -74,7 +74,7 @@
   "pacing": {
     "target_meaningful_turns_min": 10,
     "target_meaningful_turns_max": 16,
-    "default_meaningful_turn_budget": 12,
+    "default_meaningful_turn_budget": 14,
     "soft_end_at": 10,
     "hard_end_at": 16
   }

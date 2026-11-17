@@ -25,7 +25,7 @@ ACTIONS: dict[str, dict[str, Any]] = {
     "explain_own_words": {
         "label": "解释自己那句话的真实意思",
         "relationship": {"trust": 4, "respect_for_autonomy": 2},
-        "facts": ["misunderstanding_discussed"],
+        "facts": ["misunderstanding_discussed", "player_explained_quote"],
     },
     "ask_chenyu": {
         "label": "提起陈屿",
@@ -77,6 +77,11 @@ ACTIONS: dict[str, dict[str, Any]] = {
         "label": "给出承诺",
         "relationship": {"trust": 2},
         "facts": ["player_promised"],
+    },
+    "recall_memory": {
+        "label": "提起共同的回忆",
+        "relationship": {"trust": 1, "affection": 1},
+        "facts": ["player_mentioned_memory"],
     },
     "small_talk": {
         "label": "闲聊",

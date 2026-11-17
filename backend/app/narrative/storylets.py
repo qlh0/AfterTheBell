@@ -28,6 +28,7 @@ class Storylet:
     priority: int
     scene_lock: str | None
     exposition: tuple[str, ...] = ()
+    variants: tuple[dict[str, Any], ...] = ()
 
     def as_prompt_dict(self) -> dict[str, Any]:
         """给导演/角色 prompt 的裁剪版：不含内部判定逻辑。"""
@@ -75,6 +76,7 @@ class StoryletLibrary:
                     priority=int(raw.get("priority", 50)),
                     scene_lock=raw.get("scene_lock"),
                     exposition=tuple(raw.get("exposition", []) or []),
+                    variants=tuple(raw.get("variants", []) or []),
                 )
             )
         if not items:

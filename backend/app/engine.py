@@ -21,6 +21,7 @@ from .db import Database, new_game_id
 from .memory import store as memory_store
 from .narrative import director_llm, scheduler
 from .rules import actions as action_rules
+from .rules import class_talk
 from .rules import goals as goal_rules
 from .rules import endings as ending_rules
 from .rules import meaningful_turn, storylet_resolution, suggestions as suggestion_rules
@@ -152,6 +153,17 @@ class Engine:
         if getattr(reply, "beat", None):
             narration.append(reply.beat)
 
+        # 3.5 分班只讲一次：事件外问到、她也说清了计划，也算「谈过分班」
+        class_changes = class_talk.commit(state, analysis, reply.dialogue)
+        if class_changes:
+            changes.extend(class_changes)
+            events.append({
+                "event_id": "class_talk",
+                "kind": "storylet",
+                "status": "resolved",
+                "payload": {"outcome": "class_talk", "reason": "玩家问到分班，她说清了自己的打算"},
+            })
+
         # 4. 提交动作（白名单 + 每回合上限）
         #    规则动作优先；模型只能补充低风险动作（care / small_talk 等）。
         final_actions, action_notes = meaningful_turn.resolve_actions(analysis, reply.actions)
@@ -184,6 +196,7 @@ class Engine:
                     ending_block = ending_rules.ending_block(state, self.content)
                     resolved_id = active.id
                     resolved_set.append(active.id)
+                    state["last_storylet_resolved_turn"] = state["turn_index"]
                     events.append({
                         "event_id": active.id,
                         "kind": "storylet",
@@ -219,6 +232,7 @@ class Engine:
                         scheduler.clear_active(state)
                         resolved_id = active.id
                         resolved_set.append(active.id)
+                        state["last_storylet_resolved_turn"] = state["turn_index"]
                         events.append({
                             "event_id": active.id,
                             "kind": "storylet",
@@ -332,7 +346,9 @@ class Engine:
             if not config.STORYLETS_ENABLED
             else int(state["budget"]["hard_end_at"])
         )
-        if state["ending_phase"] != "committed" and gs.progress(state) >= force_at:
+        if state["ending_phase"] != "committed" and (
+            gs.progress(state) >= force_at or state["turn_index"] >= force_at
+        ):
             resolution = ending_rules.resolve(state, self.content)
             changes.extend(resolution.changes)
             ending_block = ending_rules.ending_block(state, self.content)

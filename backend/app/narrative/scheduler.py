@@ -13,6 +13,7 @@ from typing import Any
 
 from .. import game_state as gs
 from ..rules import endings as endings_rules
+from ..rules import preconditions
 from ..rules.storylet_progress import initial_evidence
 from . import director
 from .storylets import Storylet, StoryletLibrary
@@ -40,15 +41,28 @@ def _mark_used(state: dict[str, Any], storylet_id: str) -> None:
         used.append(storylet_id)
 
 
+def _choose_variant(state: dict[str, Any], storylet: Storylet) -> dict[str, Any] | None:
+    """按当前事实选择场景变体（例如共同回忆要指名是哪一段回忆）。"""
+    for variant in storylet.variants:
+        when = variant.get("when")
+        if when and preconditions.evaluate(when, state):
+            return variant
+    return None
+
+
 def _activate(state: dict[str, Any], storylet: Storylet, how: str) -> Activation:
     state["active_storylet"] = storylet.id
     state["storylet_started_turn"] = state["turn_index"]
     state["storylet_stage"] = "active"
-    state["storylet_evidence"] = initial_evidence(storylet)
+    state["storylet_evidence"] = initial_evidence(storylet, state)
     state["storylet_turns"] = 0
     state["scheduled_storylet"] = None
     state["scheduled_at_version"] = None
     _mark_used(state, storylet.id)
+
+    variant = _choose_variant(state, storylet)
+    cue = (variant or {}).get("cue") or storylet.opening_cue
+    exposition = tuple((variant or {}).get("exposition") or storylet.exposition)
 
     if storylet.id == "old_note":
         state["facts"]["old_note_seen"] = True
@@ -58,9 +72,9 @@ def _activate(state: dict[str, Any], storylet: Storylet, how: str) -> Activation
         endings_rules.prepare(state)
     return Activation(
         storylet=storylet,
-        cue=storylet.opening_cue,
+        cue=cue,
         how=how,
-        exposition=storylet.exposition,
+        exposition=exposition,
     )
 
 

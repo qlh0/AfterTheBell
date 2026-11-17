@@ -30,8 +30,13 @@ def should_plan(state: dict[str, Any], reason: str) -> tuple[bool, str]:
         return False, "当前事件仍在进行"
     if state["scheduled_storylet"]:
         return False, "已有待触发事件"
-    if state["ending_phase"] == "eligible":
-        return True, "进入收束阶段"
+
+    # v0.3.1：刚结束一个事件后留一轮呼吸，避免"刚谈完 A 立刻插 B"
+    last_resolved = int(state.get("last_storylet_resolved_turn", -1))
+    if last_resolved >= 0 and state["turn_index"] <= last_resolved + 1:
+        return False, "刚结束一个事件，留一轮呼吸"
+
+    if state["ending_phase"] == "eligible":        return True, "进入收束阶段"
     if reason in ("storylet_resolved", "advance"):
         return True, reason
     if gs.progress(state) >= int(state["budget"]["soft_end_at"]):
@@ -62,6 +67,8 @@ def score(state: dict[str, Any], storylet: Storylet) -> int:
 
     if storylet.id == "school_gate_finale":
         s += 60
+    if storylet.id == "class_choice" and not state["facts"].get("class_change_discussed"):
+        s += 25  # 尽早把分班一次说清，避免中后段重复提
     if gs.near_end(state):
         if storylet.narrative_goal in _CLOSING_GOALS:
             s += 14

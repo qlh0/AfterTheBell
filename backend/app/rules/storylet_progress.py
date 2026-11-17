@@ -46,8 +46,15 @@ class Progress:
     evidence: dict[str, Any] = field(default_factory=dict)
 
 
-def initial_evidence(storylet: Storylet) -> dict[str, Any]:
-    return dict(INITIAL_EVIDENCE.get(storylet.id, {}))
+def initial_evidence(storylet: Storylet, state: dict[str, Any] | None = None) -> dict[str, Any]:
+    ev = dict(INITIAL_EVIDENCE.get(storylet.id, {}))
+    # 玩家在事件开始前就已经解释过原话：不要逼他再说一遍
+    if state is not None and storylet.id == "late_explanation":
+        if state["facts"].get("misunderstanding_discussed"):
+            ev["quote_discussed"] = True
+        if state["facts"].get("player_explained_quote"):
+            ev["explanation_offered"] = True
+    return ev
 
 
 def update_evidence(
@@ -96,6 +103,12 @@ def update_evidence(
         ev["future_talk"] = ev.get("future_talk") or any(w in text for w in FUTURE_WORDS)
         ev["respectful"] = ev.get("respectful") or "support_autonomy" in actions
         ev["pressure"] = ev.get("pressure") or "control_autonomy" in actions
+        ack_words = ("知道", "支持", "明白", "听你", "我懂", "理解", "清楚")
+        ev["plan_ack"] = (
+            ev.get("plan_ack")
+            or state["facts"].get("class_change_discussed")
+            or ("class_change" in topics and any(w in text for w in ack_words))
+        )
 
     elif sid == "walk_home":
         if any(w in text for w in DECLINE_WORDS):
@@ -107,7 +120,8 @@ def update_evidence(
 
     elif sid == "shared_memory":
         ev["engaged"] = ev.get("engaged") or bool(
-            topics & {"romance", "care", "distance"} or any(w in text for w in ("记得", "以前", "那时候")))
+            topics & {"romance", "care", "distance"}
+            or any(w in text for w in ("记得", "以前", "那时候", "便签", "上次", "回忆")))
         ev["different"] = ev.get("different") or any(w in text for w in ("忘了", "不记得", "没印象"))
 
     elif sid == "unfinished_conversation":
@@ -194,8 +208,8 @@ def evaluate(
     if sid == "class_choice":
         if ev.get("pressure"):
             return Progress("conflict_emerged", "玩家试图替她决定分班")
-        if ev.get("future_talk") and (ev.get("class_plan") or ev.get("respectful")):
-            return Progress("discussed_respectfully", "谈到了分班计划和之后的相处")
+        if (ev.get("future_talk") and (ev.get("class_plan") or ev.get("respectful"))) or ev.get("plan_ack"):
+            return Progress("discussed_respectfully", "谈到了分班计划（和之后的相处）")
         if ev.get("class_plan") or ev.get("respectful"):
             return Progress(None, "只谈到分班本身，还没谈之后的相处")
         if turns >= 2:
@@ -218,7 +232,7 @@ def evaluate(
             return Progress("different_understanding", "同一段记忆，两个人的理解不同")
         if ev.get("engaged"):
             return Progress("shared_warmth", "玩家接住了共同的记忆")
-        if turns >= 1:
+        if turns >= 2:
             return Progress("memory_avoided", "玩家没有接这段回忆")
         return Progress(None, "等待回应")
 
@@ -283,7 +297,7 @@ def allowed_outcomes(
     if sid == "class_choice":
         if ev.get("pressure"):
             return {"conflict_emerged"}
-        if ev.get("future_talk") and (ev.get("class_plan") or ev.get("respectful")):
+        if (ev.get("future_talk") and (ev.get("class_plan") or ev.get("respectful"))) or ev.get("plan_ack"):
             return {"discussed_respectfully"}
         if turns >= 2:
             return {"topic_avoided"}
@@ -332,7 +346,7 @@ def allowed_outcomes(
             return {"different_understanding"}
         if ev.get("engaged"):
             return {"shared_warmth"}
-        if turns >= 1:
+        if turns >= 2:
             return {"memory_avoided"}
         return set()
 

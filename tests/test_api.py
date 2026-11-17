@@ -104,7 +104,7 @@ def test_ending_committed_rejects_more_turns(client):
 
     game_id = start(client)["game_id"]
     last = None
-    for text in ROUTE_CONTROL:
+    for text in list(ROUTE_CONTROL) + ["嗯。"] * 10:
         resp = interact(client, game_id, text)
         if resp.status_code != 200:
             break

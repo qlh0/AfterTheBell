@@ -63,6 +63,12 @@ init -10 python:
         if len(store.chat_log) > 80:
             store.chat_log = store.chat_log[-80:]
 
+    def atb_set_turn(narration, dialogue):
+        """底部面板分页：有旁白先只显示旁白，点「继续」才进入对话页。"""
+        store.current_narration = list(narration or [])
+        store.current_dialogue = dialogue or ""
+        store.panel_mode = "narration" if store.current_narration else "dialogue"
+
     def atb_start():
         store.chat_log = []
         data, err = atb_http("/game/start", {}, timeout=15)
@@ -75,6 +81,7 @@ init -10 python:
         for line in data.get("narration", []):
             atb_append("narrator", line)
         atb_append("xuzhi", data.get("dialogue", ""))
+        atb_set_turn(data.get("narration", []), data.get("dialogue", ""))
         atb_apply_presentation(data["presentation"])
         store.suggestions = data.get("suggestions", []) or []
         return None
@@ -86,6 +93,7 @@ init -10 python:
             atb_append("narrator", line)
         if data.get("dialogue"):
             atb_append("xuzhi", data["dialogue"])
+        atb_set_turn(data.get("narration", []), data.get("dialogue", ""))
         atb_apply_presentation(data["presentation"])
         store.suggestions = data.get("suggestions", []) or []
         if data.get("ending"):
@@ -126,6 +134,7 @@ init -10 python:
         store.turn_index = data["turn"]["index"]
         for line in data.get("narration", []):
             atb_append("narrator", line)
+        atb_set_turn(data.get("narration", []), data.get("dialogue", ""))
         atb_apply_presentation(data["presentation"])
         store.suggestions = data.get("suggestions", []) or []
         return None

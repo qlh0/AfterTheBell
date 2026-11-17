@@ -112,6 +112,10 @@ ACTION_RULES: dict[str, dict[str, Any]] = {
         "keywords": TOPIC_KEYWORDS["smalltalk"],
         "allow_question": True,
     },
+    "recall_memory": {
+        "keywords": ("记得", "还记得", "以前", "那次", "回忆", "便签", "那时候", "上次"),
+        "allow_question": True,
+    },
     "discuss_class_future": {
         # 关键词只是入口，真正判定见 analyze()：必须同时谈「分班计划」和「以后」
         "keywords": (),

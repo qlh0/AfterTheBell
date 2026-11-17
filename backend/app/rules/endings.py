@@ -39,7 +39,8 @@ def finale_eligible(state: dict[str, Any]) -> bool:
         and facts["class_change_discussed"]
         and facts["player_expressed_romance"]
     )
-    return ready and p >= 6
+    # 给关系留出至少 13 个回合的铺垫，再进入校门口收束
+    return ready and p >= 8 and state.get("turn_index", 0) >= 13
 
 
 def maybe_make_eligible(state: dict[str, Any]) -> bool:

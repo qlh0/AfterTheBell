@@ -26,6 +26,9 @@ default displayed_scene = None
 default displayed_sprite = None
 default current_event_title = None
 default chat_log = []
+default current_narration = []
+default current_dialogue = ""
+default panel_mode = "dialogue"
 default input_text = ""
 default suggestions = []
 default log_expanded = False
@@ -56,6 +59,11 @@ label selfcheck:
         $ atb_selfcheck_note("start_screen_ok res=%r" % (_res_start,))
         $ _err = atb_send("你最近是不是在躲我？")
         $ atb_selfcheck_note("send_err=%r turn=%d version=%d" % (_err, turn_index, state_version))
+        $ panel_mode = "dialogue"
+        $ atb_render_scene(transition=False)
+        $ selfcheck_shot_name = "chat_dialogue"
+        $ _res = renpy.call_screen("chat_ui")
+        $ atb_selfcheck_note("screen_ok res=%r" % (_res,))
         $ _err = atb_advance()
         $ atb_selfcheck_note("advance_err=%r scene=%s sprite=%s" % (_err, scene_id, sprite_id))
     $ atb_selfcheck_note("chat_log=%d suggestions=%d" % (len(chat_log), len(suggestions)))
@@ -63,7 +71,7 @@ label selfcheck:
     $ selfcheck_shot_name = "chat"
     $ log_expanded = False
     $ _res = renpy.call_screen("chat_ui")
-    $ atb_selfcheck_note("screen_ok res=%r" % (_res,))
+    $ atb_selfcheck_note("screen2_ok res=%r" % (_res,))
     $ selfcheck_shot_name = "chat_log"
     $ log_expanded = True
     $ _res_log = renpy.call_screen("chat_ui")

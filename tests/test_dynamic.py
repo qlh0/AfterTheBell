@@ -117,6 +117,10 @@ def test_shared_memory_needs_real_shared_experience(content):
 
     state["facts"]["old_note_seen"] = True
     ids = {s.id for s in library.eligible(state)}
+    assert "shared_memory" not in ids, "只提过便签不够，玩家没提回忆就不该触发"
+
+    state["facts"]["player_mentioned_memory"] = True
+    ids = {s.id for s in library.eligible(state)}
     assert "shared_memory" in ids
 
 

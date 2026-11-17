@@ -81,9 +81,8 @@ def test_endless_filler_still_ends(engine):
     assert ending is not None, "40 轮闲聊后仍然没有收束"
     state = engine.get_state(gid, include_internal=True)["state"]
     assert state["ending_phase"] == "committed"
-    # 纯闲聊时进度 = turn//2，因此回合数上限约是硬上限的两倍
-    assert state["turn_index"] <= state["budget"]["hard_end_at"] * 2 + 2
-    assert gs.progress(state) >= state["budget"]["soft_end_at"]
+    # 纯闲聊也会在硬上限附近被强制收束（不再拖到两倍回合）
+    assert state["turn_index"] <= state["budget"]["hard_end_at"] + 2
 
 
 def test_disabled_storylets_still_reach_an_ending(engine, monkeypatch):
@@ -136,7 +135,10 @@ def test_exposition_is_shown_when_event_activates(engine, monkeypatch):
 
     data = engine.interact(gid, "我那天真的不是在说你。", "req_expo_0000001")
     assert any("高中谈恋爱很麻烦" in line for line in data["narration"])
-    assert data["active_event_id"] == "late_explanation"
+    # 玩家已经解释过：事件可以在同一轮直接收束，但背景旁白必须先出现
+    resolved = [e for e in engine.get_events(gid)["events"]
+                if e["event_id"] == "late_explanation" and e["status"] == "resolved"]
+    assert data["active_event_id"] == "late_explanation" or resolved
 
 
 # ---------------- 指标不影响玩家可见层 ----------------

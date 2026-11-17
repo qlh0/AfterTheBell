@@ -91,7 +91,10 @@ screen chat_ui():
 
                 hbox:
                     spacing 10
-                    text "许栀" size 20 color "#f2c9a2" bold True
+                    if store.panel_mode == "narration":
+                        text "旁白" size 20 color "#b3c0d2" bold True
+                    else:
+                        text "许栀" size 20 color "#f2c9a2" bold True
                     if store.current_event_title:
                         text "- [current_event_title]" size 14 color "#93a1b8" yalign 0.5
                     null width 1
@@ -100,69 +103,68 @@ screen chat_ui():
                         color "#6f7d94"
                         yalign 0.6
 
-                fixed:
-                    xfill True
-                    ysize 140
-
-                    viewport:
-                        ysize 140
-                        mousewheel True
-                        draggable True
-                        yinitial 1.0
+                if store.panel_mode == "narration":
+                    ## 旁白页：只显示旁白，不显示任何对话或输入框
+                    fixed:
+                        xfill True
+                        ysize 210
                         vbox:
-                            spacing 9
-                            for item in store.chat_log[-6:]:
-                                use chat_entry(item)
+                            spacing 12
+                            for line in store.current_narration:
+                                text line size 21 color "#c7d3e3" xsize 1180
+                    hbox:
+                        spacing 10
+                        textbutton "继续":
+                            style "chat_button"
+                            action SetVariable("panel_mode", "dialogue")
+                        null width 1
+                        text "点「继续」进入对话" size 12 color "#6f7d94" yalign 0.6
 
-                    ## 顶部渐隐：只露出一半的旧消息自然淡出，不显得被切断
-                    vbox:
-                        xsize 1232
-                        spacing 0
-                        add Solid("#0a0e16ee"):
-                            xsize 1232
-                            ysize 5
-                        add Solid("#0a0e16c4"):
-                            xsize 1232
-                            ysize 5
-                        add Solid("#0a0e1690"):
-                            xsize 1232
-                            ysize 5
-                        add Solid("#0a0e1658"):
-                            xsize 1232
-                            ysize 5
+                else:
+                    ## 对话页：只显示她这一句 + 建议回复 + 输入框
+                    fixed:
+                        xfill True
+                        ysize 132
+                        if store.current_dialogue:
+                            text store.current_dialogue:
+                                size 20
+                                color "#eaeff8"
+                                xsize 1180
+                        else:
+                            text "（她没接话，你可以先开口。）" size 17 color "#6f7d94"
 
-                if store.suggestions:
+                    if store.suggestions:
+                        hbox:
+                            spacing 8
+                            for sug in store.suggestions:
+                                textbutton sug["label"]:
+                                    style "chip_button"
+                                    action SetVariable("input_text", sug["text"])
+
+                    hbox:
+                        spacing 10
+                        frame:
+                            background Solid("#151d2b")
+                            padding (12, 5)
+                            xsize 1040
+                            input:
+                                value VariableInputValue("input_text")
+                                length 200
+                                size 19
+                                color "#eef2f8"
+                                caret Solid("#f2c9a2", xsize=2)
+                                xsize 1000
+                        textbutton "发送":
+                            style "chat_button"
+                            action If(store.input_text.strip() != "", Return(("send", store.input_text)), NullAction())
+                            sensitive store.input_text.strip() != ""
+
                     hbox:
                         spacing 8
-                        for sug in store.suggestions:
-                            textbutton sug["label"]:
-                                style "chip_button"
-                                action SetVariable("input_text", sug["text"])
-
-                hbox:
-                    spacing 10
-                    frame:
-                        background Solid("#151d2b")
-                        padding (12, 5)
-                        xsize 1040
-                        input:
-                            value VariableInputValue("input_text")
-                            length 200
-                            size 19
-                            color "#eef2f8"
-                            caret Solid("#f2c9a2", xsize=2)
-                            xsize 1000
-                    textbutton "发送":
-                        style "chat_button"
-                        action If(store.input_text.strip() != "", Return(("send", store.input_text)), NullAction())
-                        sensitive store.input_text.strip() != ""
-
-                hbox:
-                    spacing 8
-                    textbutton "推进时间" style "chat_button" action Return(("advance", None))
-                    textbutton "结束本局" style "chat_button" action Return(("quit", None))
-                    null width 6
-                    text "Enter 发送，上面是可参考的说法，点一下填进输入框，可以自己改" size 12 color "#6f7d94" yalign 0.6
+                        textbutton "推进时间" style "chat_button" action Return(("advance", None))
+                        textbutton "结束本局" style "chat_button" action Return(("quit", None))
+                        null width 6
+                        text "Enter 发送，上面是可参考的说法，点一下填进输入框，可以自己改" size 12 color "#6f7d94" yalign 0.6
 
         ## ---------------- 右上角：展开聊天记录 ----------------
         textbutton ("聊天记录 (%d)" % len(store.chat_log)):
@@ -172,7 +174,7 @@ screen chat_ui():
             yoffset 14
             action SetVariable("log_expanded", True)
 
-    key "K_RETURN" action If(not store.log_expanded and store.input_text.strip() != "", Return(("send", store.input_text)), NullAction())
+    key "K_RETURN" action If(not store.log_expanded and store.panel_mode == "dialogue" and store.input_text.strip() != "", Return(("send", store.input_text)), NullAction())
 
 
 screen thinking_overlay():

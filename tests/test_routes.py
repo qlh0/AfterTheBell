@@ -41,7 +41,7 @@ def test_route_control_ends_friends(engine):
     assert state["relationship"]["respect_for_autonomy"] <= 40, "尊重值没有因干预下降"
 
     last = None
-    for text in ROUTE_CONTROL[2:]:
+    for text in list(ROUTE_CONTROL[2:]) + ["嗯。"] * 8:
         last = send(engine, game_id, text)
         if last.get("ending"):
             break

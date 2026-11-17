@@ -118,13 +118,16 @@ def test_support_without_class_topic_does_not_claim_discussion(engine):
     assert _fact(state, "class_change_discussed") is False
 
 
-def test_support_with_class_topic_does_not_claim_discussion(engine):
-    """表态支持 ≠ 已经认真谈过分班计划与未来（后者只由事件结算写入）。"""
+def test_support_plus_her_plan_counts_as_class_talk(engine):
+    """表态支持 + 她真的说了自己的打算 → 这一轮就算谈过分班（v0.3.1）。
+
+    但只有「支持」两个字、她没提计划时不算。
+    """
     start = engine.start()
     gid = start["game_id"]
     engine.interact(gid, "我支持你去重点班，但我确实会舍不得。", "req_sem_0000007")
     state = engine.get_state(gid, include_internal=True)["state"]
-    assert _fact(state, "class_change_discussed") is False
+    assert _fact(state, "class_change_discussed") is True
     assert _fact(state, "player_controlling") is False
     assert state["relationship"]["respect_for_autonomy"] >= 52
 
