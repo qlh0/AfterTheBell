@@ -86,78 +86,84 @@ screen chat_ui():
             ysize 236
             padding (24, 14)
 
-            vbox:
-                spacing 6
+            fixed:
+                xfill True
+                ysize 208
 
-                hbox:
-                    spacing 10
-                    if store.panel_mode == "narration":
-                        text "旁白" size 20 color "#b3c0d2" bold True
-                    else:
-                        text "许栀" size 20 color "#f2c9a2" bold True
-                    if store.current_event_title:
-                        text "- [current_event_title]" size 14 color "#93a1b8" yalign 0.5
-                    null width 1
-                    text ("序章" if store.turn_index == 0 else "第%d回合" % store.turn_index):
-                        size 12
-                        color "#6f7d94"
-                        yalign 0.6
-
-                if store.panel_mode == "narration":
-                    ## 旁白页：只显示旁白，不显示任何对话或输入框
-                    vbox:
-                        spacing 10
-                        for line in store.current_narration:
-                            text line size 21 color "#c7d3e3" xsize 1180
+                vbox:
+                    spacing 6
 
                     hbox:
                         spacing 10
+                        if store.panel_mode == "narration":
+                            text "旁白" size 20 color "#b3c0d2" bold True
+                        else:
+                            text "许栀" size 20 color "#f2c9a2" bold True
+                        if store.current_event_title:
+                            text "- [current_event_title]" size 14 color "#93a1b8" yalign 0.5
+                        null width 1
+                        text ("序章" if store.turn_index == 0 else "第%d回合" % store.turn_index):
+                            size 12
+                            color "#6f7d94"
+                            yalign 0.6
+
+                    if store.panel_mode == "narration":
+                        ## 旁白页：只显示旁白，不显示任何对话或输入框
+                        vbox:
+                            spacing 10
+                            for line in store.current_narration:
+                                text line size 21 color "#c7d3e3" xsize 1180
+
+                    else:
+                        ## 对话页：只显示她这一句 + 建议回复 + 输入框
+                        if store.current_dialogue:
+                            text store.current_dialogue:
+                                size 20
+                                color "#eaeff8"
+                                xsize 1180
+                        else:
+                            text "（她没接话，你可以先开口。）" size 17 color "#6f7d94"
+
+                        $ _visible_suggestions = atb_visible_suggestions()
+                        if _visible_suggestions:
+                            hbox:
+                                spacing 8
+                                for sug in _visible_suggestions:
+                                    textbutton sug["label"]:
+                                        style "chip_button"
+                                        action [Function(atb_mark_suggestion_used, sug["text"]),
+                                                SetVariable("input_text", sug["text"])]
+
+                        hbox:
+                            spacing 8
+                            text "你：" size 19 color "#7f9dcb" yalign 0.5
+                            frame:
+                                background Solid("#151d2b")
+                                padding (12, 5)
+                                xsize 1040
+                                input:
+                                    value VariableInputValue("input_text")
+                                    length 200
+                                    size 19
+                                    color "#eef2f8"
+                                    caret Solid("#f2c9a2", xsize=2)
+                                    xsize 1000
+                            textbutton "发送":
+                                style "chat_button"
+                                action If(store.input_text.strip() != "", Return(("send", store.input_text)), NullAction())
+                                sensitive store.input_text.strip() != ""
+
+                ## 底部动作条：推进时间 / 结束本局（或旁白页的继续）
+                hbox:
+                    yalign 1.0
+                    spacing 8
+                    if store.panel_mode == "narration":
                         textbutton "继续":
                             style "chat_button"
                             action SetVariable("panel_mode", "dialogue")
-                        null width 1
+                        null width 6
                         text "点「继续」进入对话" size 12 color "#6f7d94" yalign 0.6
-
-                else:
-                    ## 对话页：只显示她这一句 + 建议回复 + 输入框
-                    if store.current_dialogue:
-                        text store.current_dialogue:
-                            size 20
-                            color "#eaeff8"
-                            xsize 1180
                     else:
-                        text "（她没接话，你可以先开口。）" size 17 color "#6f7d94"
-
-                    $ _visible_suggestions = atb_visible_suggestions()
-                    if _visible_suggestions:
-                        hbox:
-                            spacing 8
-                            for sug in _visible_suggestions:
-                                textbutton sug["label"]:
-                                    style "chip_button"
-                                    action [Function(atb_mark_suggestion_used, sug["text"]),
-                                            SetVariable("input_text", sug["text"])]
-
-                    hbox:
-                        spacing 10
-                        frame:
-                            background Solid("#151d2b")
-                            padding (12, 5)
-                            xsize 1040
-                            input:
-                                value VariableInputValue("input_text")
-                                length 200
-                                size 19
-                                color "#eef2f8"
-                                caret Solid("#f2c9a2", xsize=2)
-                                xsize 1000
-                        textbutton "发送":
-                            style "chat_button"
-                            action If(store.input_text.strip() != "", Return(("send", store.input_text)), NullAction())
-                            sensitive store.input_text.strip() != ""
-
-                    hbox:
-                        spacing 8
                         textbutton "推进时间" style "chat_button" action Return(("advance", None))
                         textbutton "结束本局" style "chat_button" action Return(("quit", None))
                         null width 6
