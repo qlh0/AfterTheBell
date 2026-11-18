@@ -31,6 +31,7 @@ default current_dialogue = ""
 default panel_mode = "dialogue"
 default input_text = ""
 default suggestions = []
+default used_suggestions = []
 default log_expanded = False
 default ending_data = None
 default backend_ok = False
@@ -60,6 +61,9 @@ label selfcheck:
         $ _err = atb_send("你最近是不是在躲我？")
         $ atb_selfcheck_note("send_err=%r turn=%d version=%d" % (_err, turn_index, state_version))
         $ panel_mode = "dialogue"
+        $ _sug_before = len(atb_visible_suggestions())
+        $ atb_mark_suggestion_used(suggestions[0]["text"]) if suggestions else None
+        $ atb_selfcheck_note("suggestions_filtered %d->%d" % (_sug_before, len(atb_visible_suggestions())))
         $ atb_render_scene(transition=False)
         $ selfcheck_shot_name = "chat_dialogue"
         $ _res = renpy.call_screen("chat_ui")

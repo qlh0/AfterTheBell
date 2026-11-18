@@ -69,8 +69,28 @@ init -10 python:
         store.current_dialogue = dialogue or ""
         store.panel_mode = "narration" if store.current_narration else "dialogue"
 
+    def atb_visible_suggestions():
+        """已经点过/发过的建议不再出现；同一轮里相同文本只留一个。"""
+        seen = set()
+        out = []
+        for sug in store.suggestions:
+            text = (sug.get("text") or "").strip()
+            if not text or text in store.used_suggestions or text in seen:
+                continue
+            seen.add(text)
+            out.append(sug)
+        return out
+
+    def atb_mark_suggestion_used(text):
+        text = (text or "").strip()
+        if text and text not in store.used_suggestions:
+            store.used_suggestions.append(text)
+            if len(store.used_suggestions) > 100:
+                store.used_suggestions = store.used_suggestions[-100:]
+
     def atb_start():
         store.chat_log = []
+        store.used_suggestions = []
         data, err = atb_http("/game/start", {}, timeout=15)
         if err:
             return err
@@ -103,6 +123,7 @@ init -10 python:
         text = (text or "").strip()
         if not text:
             return "empty_text"
+        atb_mark_suggestion_used(text)
         atb_append("player", text)
         payload = {
             "text": text,

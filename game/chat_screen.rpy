@@ -78,16 +78,15 @@ screen chat_ui():
                             use chat_entry(item)
 
     else:
-        ## ---------------- 底部对话面板 ----------------
+        ## ---------------- 底部对话面板（高度随当前文字自适应） ----------------
         frame:
             background Solid("#0a0e16f0")
             xfill True
             yalign 1.0
-            ysize 322
-            padding (24, 12)
+            padding (24, 10)
 
             vbox:
-                spacing 7
+                spacing 6
 
                 hbox:
                     spacing 10
@@ -105,13 +104,11 @@ screen chat_ui():
 
                 if store.panel_mode == "narration":
                     ## 旁白页：只显示旁白，不显示任何对话或输入框
-                    fixed:
-                        xfill True
-                        ysize 210
-                        vbox:
-                            spacing 12
-                            for line in store.current_narration:
-                                text line size 21 color "#c7d3e3" xsize 1180
+                    vbox:
+                        spacing 10
+                        for line in store.current_narration:
+                            text line size 21 color "#c7d3e3" xsize 1180
+
                     hbox:
                         spacing 10
                         textbutton "继续":
@@ -122,24 +119,23 @@ screen chat_ui():
 
                 else:
                     ## 对话页：只显示她这一句 + 建议回复 + 输入框
-                    fixed:
-                        xfill True
-                        ysize 132
-                        if store.current_dialogue:
-                            text store.current_dialogue:
-                                size 20
-                                color "#eaeff8"
-                                xsize 1180
-                        else:
-                            text "（她没接话，你可以先开口。）" size 17 color "#6f7d94"
+                    if store.current_dialogue:
+                        text store.current_dialogue:
+                            size 20
+                            color "#eaeff8"
+                            xsize 1180
+                    else:
+                        text "（她没接话，你可以先开口。）" size 17 color "#6f7d94"
 
-                    if store.suggestions:
+                    $ _visible_suggestions = atb_visible_suggestions()
+                    if _visible_suggestions:
                         hbox:
                             spacing 8
-                            for sug in store.suggestions:
+                            for sug in _visible_suggestions:
                                 textbutton sug["label"]:
                                     style "chip_button"
-                                    action SetVariable("input_text", sug["text"])
+                                    action [Function(atb_mark_suggestion_used, sug["text"]),
+                                            SetVariable("input_text", sug["text"])]
 
                     hbox:
                         spacing 10
