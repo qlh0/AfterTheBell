@@ -36,6 +36,7 @@
 /selfcheck.txt
 /game/selfcheck.txt
 /game/shot_*.png
+/docs/ui_chat*.jpg
 __pycache__/
 *.pyc
 *.log

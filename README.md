@@ -2,16 +2,10 @@
 
 [![tests](https://github.com/qlh0/AfterTheBell/actions/workflows/tests.yml/badge.svg)](https://github.com/qlh0/AfterTheBell/actions/workflows/tests.yml)
 
-校园恋爱视觉小说演示：**Ren'Py 8.6 客户端 + FastAPI/SQLite 后端**。
-你用自由输入和她聊天，大模型负责自然对白，**规则**负责世界事实、事件触发与结局判定。
+AI 校园恋爱视觉小说演示：**Ren'Py 8.6 客户端 + FastAPI/SQLite 后端**。
+你用自由输入和她聊天，AI 负责自然对白，**规则**负责世界事实、事件触发与结局判定。
 
-> 不是选项式视觉小说：没有固定选项树，只有“她怎么接你这句话”和“哪些事真的发生了”。
-
-![对话页](docs/ui_chat.jpg)
-
-![旁白页](docs/ui_chat_narration.jpg)
-
-![聊天记录](docs/ui_chat_log.jpg)
+> 不是选项式 Galgame：没有固定选项树，只有“她怎么接你这句话”和“哪些事真的发生了”。
 
 ---
 
