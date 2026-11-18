@@ -210,8 +210,7 @@ init -10 python:
             pass
 
     def atb_selfcheck_reset():
-        for path in (os.path.join(config.gamedir, "selfcheck.txt"),
-                     r"D:\AfterTheBell\game\selfcheck.txt"):
+        for path in (os.path.join(config.gamedir, "selfcheck.txt"),):
             try:
                 if os.path.exists(path):
                     os.remove(path)
@@ -220,8 +219,7 @@ init -10 python:
 
     def atb_selfcheck_note(line):
         """开发自检用：每步立刻落盘，卡住也能看出走到哪一步。"""
-        for path in (os.path.join(config.gamedir, "selfcheck.txt"),
-                     r"D:\AfterTheBell\game\selfcheck.txt"):
+        for path in (os.path.join(config.gamedir, "selfcheck.txt"),):
             try:
                 with open(path, "a", encoding="utf-8") as f:
                     f.write(str(line) + "\n")

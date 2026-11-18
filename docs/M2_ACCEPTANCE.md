@@ -74,7 +74,7 @@ $ .venv\Scripts\python.exe -m pytest -q
 .............................................................            [100%]
 [exit=0]     # 61 项
 
-$ D:\renpy-8.6.0-sdk\renpy.exe D:\AfterTheBell lint
+$ renpy.exe <repo> lint
 Statistics: 0 menus, 5 images, 29 screens
 [exit=0]
 ```

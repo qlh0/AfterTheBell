@@ -25,7 +25,6 @@
 /dialogue.txt
 /strings.json
 
-
 # Keystore files used for signing Android apps.
 /*.keystore
 
@@ -36,5 +35,13 @@
 /.pytest_cache/
 /selfcheck.txt
 /game/selfcheck.txt
+/game/shot_*.png
 __pycache__/
 *.pyc
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

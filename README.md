@@ -1,360 +1,369 @@
 # 那天放学后 / After the Bell
 
-一个以**自由输入对话**为主要交互的校园恋爱视觉小说 Demo。
-AI 负责自然对白，**可验证的规则**负责世界事实、事件触发与结局判定。
+[![tests](https://github.com/qlh0/AfterTheBell/actions/workflows/tests.yml/badge.svg)](https://github.com/qlh0/AfterTheBell/actions/workflows/tests.yml)
 
-- 当前状态：**v0.3.2**——在 v0.3.1 基础上修正解释识别、同行邀请时序，并放宽“分班安慰”的尊重分。
-- 平台：Ren'Py 8.6 桌面版；通信为普通 HTTP/JSON（无 SSE）。
+AI 校园恋爱视觉小说 Demo：**Ren'Py 8.6 客户端 + FastAPI/SQLite 后端**。
+你用自由输入和她聊天，AI 负责自然对白，**规则**负责世界事实、事件触发与结局判定。
 
-![对话页：固定高度 236px，四周留白，只显示女主这一句 + 未点过的建议 + 输入框](docs/ui_chat.jpg)
+> 不是选项式 Galgame：没有固定选项树，只有“她怎么接你这句话”和“哪些事真的发生了”。
 
-旁白页只显示旁白，点「继续」才进入对话页：
+![对话页](docs/ui_chat.jpg)
 
 ![旁白页](docs/ui_chat_narration.jpg)
 
-聊天记录从右上角按钮展开为右侧抽屉，不遮挡人物（完整记录仍在这里）：
-
-![展开聊天记录](docs/ui_chat_log.jpg)
-
-> v0.3 的逐项完成情况、迁移说明与剩余风险见 [docs/V0.3_ACCEPTANCE.md](docs/V0.3_ACCEPTANCE.md)。
+![聊天记录](docs/ui_chat_log.jpg)
 
 ---
 
-## 0. v0.3.1 补了什么
+## 1. 项目特点
 
-- **分班一次说清**：玩家问到分班、她也真的说了自己的打算，这一轮就记为「谈过分班」；
-  之后 `class_choice` 永久关闭，她不会再反复提意向表，也不会刚说完就反问「你知不知道」。
-- **回忆必须有钩子**：`shared_memory` 只在玩家自己提到「记得/以前/那次/便签/上次」时才可能触发；
-  触发时点名具体的那段回忆（旧便签或一起走的路），不再用「一件小事」空泛带过。
-- **事件之间留呼吸**：事件刚结束的一轮不立刻插新事件，优先让玩家消化。
-- **节奏 +约两轮**：默认有效回合预算 12 → 14，结局资格从进度 8 提到 10，硬收束按回合数封顶（不会无限拖）。
-- **面板分页**：旁白只显示旁白；对话只显示她这一句 + 建议 + 输入框。完整对话在右上角「聊天记录」。
-- **面板统一高度**：固定 236px，旁白页/对话页同高，四周留白，不再随文字忽高忽低。
-- **底部动作条**：「推进时间 / 结束本局」固定在面板最下方；输入框前有「你：」前缀。
-- **建议不重复**：点过（或手动发过同样文本）的对话提示，后面不会再出现。
+- **自由输入**：直接打字聊天；界面给 2–4 句可参考的说法，点一下填进输入框，也可以自己改。
+- **规则权威**：AI 只提议动作和台词；关系值、事实、事件结果、结局都由服务端规则提交，模型不能替你表白或改写结局。
+- **事件有生命周期**：`active → interacting → resolved / abandoned`，必须有互动证据；一句无关的话不会自动完成事件。
+- **三条线索**：她为什么疏远你、那句被误解的话、分班之后怎么相处；线索状态会进入导演决策。
+- **三种结局**：`romance` / `friends` / `missed`，由双方意愿、事实与关系值共同决定。
+- **读档 = 新时间线**：每次读档创建新分支，只继承读档点之前的对话/记忆/事件，不会“看到未来”。
+- **对局记录**：结局时自动保存本局记录（结局、状态、事件链、完整对话），同时写入 SQLite、JSON、Markdown。
+- **可测试**：143 项 pytest，覆盖语义反例、事件证据、分支隔离、结局门槛、记录等；测试不消耗 API Token。
 
-## 0.1 v0.3.2 补了什么
+## 2. 技术栈
 
-- **解释更容易被认出来**：「我说的不是你」「那天是在说陈屿他们班」「不是那个意思」都算解释，
-  会写 `player_explained_quote`，让「那句话」事件能真正澄清，而不是停在“说开一半”。
-- **同行邀请留一轮**：`walk_home` 激活当轮不再直接判“各自离开”，玩家下一句接受仍算数。
-- **分班安慰给尊重分**：「就算不在一个班，也还是一个学校 / 还能见 / 一起走」这类话 +2 尊重，
-  不再只有“我支持你的选择”这种句式才加分。
+| 层 | 技术 |
+|---|---|
+| 客户端 | Ren'Py 8.6（Python 脚本 + screen 语言） |
+| 后端 | Python 3.12、FastAPI、Pydantic 2、uvicorn |
+| 存储 | SQLite（状态、快照、回合流水、记忆、事件、指标、对局记录） |
+| 模型 | DeepSeek `deepseek-chat`（OpenAI 兼容接口） |
+| 测试 | pytest（强制 mock，不需要真实 Key） |
 
-- **语义不再被关键词带偏**：否定、引用、疑问、假设、主客体都会判断；「我不喜欢你」不会写入表白，
-  「我希望你不要为了我放弃重点班」不会被判成控制。
-- **事件不能一句话自动完成**：`active → interacting → resolved/abandoned`，必须有互动证据；无证据就等待，超时才放弃。
-- **读档不会泄漏未来**：每次读档新开一个 `branch_id` 分支，只继承读档点之前的对话/记忆/事件。
-- **许栀会主动**：白名单 `npc_intent`（问疏远/提分班/邀请同行/划边界），只排期、不直接完成事件。
-- **未解决线索真的存在**：`open_threads` 三条线索从事实推导，进入导演 prompt 与打分。
-- **目标与结局更严谨**：目标由 JSON 谓词驱动；`romance` 需要双方意愿与尊重，`friends` 不会被数值硬塞。
+```text
+Ren'Py 客户端  ──HTTP/JSON──▶  FastAPI 后端  ──▶  SQLite
+      │                          │
+      └── 只拿可展示文本 ────────┘  ├── 规则引擎（事实/关系/事件/结局）
+                                   └── DeepSeek API（对白 + 导演）
+```
+
+服务端是唯一权威状态；客户端不保存数值、事实名或角色秘密。
 
 ---
 
-## 1. 30 秒上手
+## 3. 环境要求
 
-1. 复制 `.env.example` 为 `.env`，填入你的 `LLM_API_KEY`（DeepSeek 官方默认已配好）。
-   `ATB_LLM_MODE=llm` 用真模型；`mock` 则离线跑模板对白。
-2. 双击 **`run_dev.bat`**：起后端（独立窗口）→ 等 `/health` 就绪 → 打开游戏。
+| 依赖 | 版本 / 说明 | 必须 |
+|---|---|---|
+| **Ren'Py SDK** | **8.6.x**，提供 `renpy.exe` / `renpy.sh` | ✅ 运行客户端 |
+| **Python** | **3.12+**（后端，不能复用 Ren'Py 自带 Python） | ✅ |
+| **DeepSeek API Key** | 在 <https://platform.deepseek.com/> 创建 | ✅ 正式游玩 |
+| 操作系统 | Windows 10/11、macOS（Linux 也可，用 `renpy.sh`） | — |
+| Git | 拉取仓库 | 建议 |
 
-手动启动：
+> `mock` 模式只用于自动化测试/离线开发，**不是正式游玩方式**；没有 Key 时后端会拒绝启动。
 
-```powershell
+---
+
+## 4. 快速开始（Windows）
+
+### 4.1 安装 Ren'Py 8.6 SDK
+
+1. 打开 <https://www.renpy.org/latest.html>，下载 **Ren'Py 8.6** 的 SDK；
+2. 解压到一个固定目录，例如 `C:\renpy-8.6.0-sdk`；
+3. 可选：设置环境变量 `RENPY_HOME` 指向该目录（推荐，启动器会优先使用）：
+
+```bat
+setx RENPY_HOME "C:\renpy-8.6.0-sdk"
+```
+
+> 启动器也会自动搜索 `Downloads`、用户目录、`C:\`、`D:\` 下的 `renpy-*` 目录；找不到时再手动设置 `RENPY_HOME`。
+
+### 4.2 安装 Python 3.12
+
+从 <https://www.python.org/downloads/> 安装 Python 3.12，安装时勾选 **Add python.exe to PATH**。
+
+### 4.3 拉取并初始化
+
+```bat
+git clone https://github.com/qlh0/AfterTheBell.git
+cd AfterTheBell
+setup.bat
+```
+
+`setup.bat` 会创建 `.venv` 并安装 `backend/requirements.txt`。
+
+### 4.4 配置 API Key（必填）
+
+```bat
+copy .env.example .env
+notepad .env
+```
+
+把 `LLM_API_KEY=` 后面填成你的 DeepSeek Key：
+
+```ini
+ATB_LLM_MODE=llm
+LLM_API_KEY=sk-你的真实Key
+```
+
+> `.env` 已被 `.gitignore` 忽略，不会提交；不要把它发给别人。
+
+### 4.5 启动
+
+```bat
+run_dev.bat
+```
+
+它会：
+1. 检查 `.env` / Key；
+2. 启动 FastAPI（`http://127.0.0.1:8756`）；
+3. 等待 `/health` 就绪；
+4. 打开 Ren'Py 客户端；
+5. 游戏退出后关闭由它启动的后端。
+
+---
+
+## 5. 快速开始（macOS）
+
+### 5.1 安装 Ren'Py 8.6 SDK
+
+从 <https://www.renpy.org/latest.html> 下载 macOS 版 SDK，解压/安装到例如 `~/renpy-8.6.0-sdk`，然后：
+
+```bash
+export RENPY_HOME="$HOME/renpy-8.6.0-sdk"
+```
+
+建议写入 `~/.zshrc` 持久化。
+
+### 5.2 安装 Python 3.12
+
+```bash
+brew install python@3.12
+# 或者从 https://www.python.org/downloads/ 安装
+```
+
+### 5.3 拉取并初始化
+
+```bash
+git clone https://github.com/qlh0/AfterTheBell.git
+cd AfterTheBell
+chmod +x setup.command run_dev.command run_backend.command
+./setup.command
+```
+
+### 5.4 配置 Key
+
+```bash
+cp .env.example .env
+${EDITOR:-nano} .env    # 填 LLM_API_KEY
+```
+
+### 5.5 启动
+
+```bash
+./run_dev.command
+```
+
+或在 Finder 里双击 `run_dev.command`（首次可能需要在“系统设置 → 隐私与安全性”里允许）。
+
+> 如果提示 “cannot be opened because the developer cannot be verified”，右键 → 打开；仍不行时执行 `xattr -dr com.apple.quarantine .`。
+
+---
+
+## 6. 手动启动（不用一键脚本）
+
+### Windows
+
+```bat
+:: 终端 A：后端
+.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8756
+
+:: 终端 B：客户端
+"%RENPY_HOME%\renpy.exe" .
+```
+
+### macOS / Linux
+
+```bash
 # 终端 A：后端
-cd D:\AfterTheBell\backend
-..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8756
+.venv/bin/python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8756
 
-# 终端 B：游戏
-D:\renpy-8.6.0-sdk\renpy.exe D:\AfterTheBell
+# 终端 B：客户端
+"$RENPY_HOME/renpy.sh" .
 ```
 
-第一次从零搭环境：
-
-```powershell
-py -3.12 -m venv .venv
-.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-```
-
-游戏里：在右侧输入框打字 → `发送`（或 Enter）；`推进时间` 相当于"结束这一幕/放学"；`结束本局` 回标题。
-Esc 打开存档菜单。
+游戏默认连接 `http://127.0.0.1:8756`；如果改端口，需要同时改 `ATB_PORT` 和客户端设置。
 
 ---
 
-## 2. 现在是什么状态
+## 7. 配置项（`.env`）
 
-| 层 | 内容 |
-|---|---|
-| 客户端 | Ren'Py 8.6，中文 UI（内置思源黑体）；**女主居中**，底部**旁白页/对话页分离、统一 236px 高**（旁白只显示旁白；对话只显示女主这一句 + 未点过的建议 + 带「你：」前缀的输入框；推进/结束固定在底部动作条），**右上角聊天记录按钮 → 右侧抽屉**，思考中提示，后端离线兜底，三种结局演出，读档快照对齐 |
-| 角色 Agent | 真实 LLM（DeepSeek `deepseek-chat`，OpenAI 兼容），JSON 输出 + 校验 + 语气兜底 + 重试；`mock` 模式可离线 |
-| 导演 | LLM 在规则已过滤的候选里选事件或 `no_event`，只在关键节点调用；失败退回确定性打分；排期带版本号 |
-| 建议回复 | 规则生成 2–4 句「可以这么说」，点击填入输入框，可自行修改（不是选项分支） |
-| 指标 | `GET /game/{id}/metrics`：分用途 P50/P95/max 延迟、调用数、失败原因、token |
-| 对局记录 | 结局时自动保存：SQLite `game_records` + `backend/data/records/*.json|*.md`（含结局、状态、事件链、完整对话）；`GET /game/{id}/record`、`GET /records` |
-| 消融对照 | `tools/ablation.py`：纯 LLM / +Storylet / +Director 三种配置跑同一脚本，输出 Markdown |
-| 协议 | `POST /game/start`、`GET /game/{id}/state`、`POST /game/{id}/interact`、`POST /game/{id}/advance`、`GET /game/{id}/events`、`POST /game/{id}/restore/{version}` |
-| 规则 | 前置条件 DSL、**8 个 Storylet + 校门口 finale**、**5 个叙事目标（含 1 个可选）**、事件生命周期与证据、`eligible → prepared → committed` 结局状态机 |
-| 存储 | SQLite：权威状态、逐版本快照、`request_id` 幂等、**分支时间线（branch_id）**、回合流水、事件日志、记忆、LLM 指标 |
-| 测试 | **139 项 pytest**：三路线结局、幂等、版本冲突、无泄露、语义反例（否定/引用/疑问）、事件证据与放弃、读档分支隔离、线索、NPC 主动意图、目标谓词、新事件与结局一致性、对局记录、分班只讲一次、回忆钩子、解释识别与同行宽限 |
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `ATB_LLM_MODE` | `llm` | `llm` 正式游玩；`mock` 仅测试 |
+| `LLM_API_KEY` | 空 | **必填**，DeepSeek API Key |
+| `LLM_BASE_URL` | `https://api.deepseek.com/v1` | OpenAI 兼容接口地址 |
+| `LLM_MODEL` | `deepseek-chat` | 模型名 |
+| `ATB_PORT` | `8756` | 后端端口 |
+| `ATB_TURN_BUDGET` | `14` | 有效互动预算 |
+| `ATB_DIRECTOR` | `1` | 是否让 LLM 在关键节点选事件 |
+| `ATB_ALLOW_MOCK` | `0` | 仅测试：允许 `mock` 模式 |
 
-**设计红线（v0.3）**
+没有 `LLM_API_KEY` 时：
 
-- AI 只提议，**规则**提交状态；非法动作直接丢弃。
-- **玩家意图按小句判断**：主语、否定、引用、疑问、假设都参与判断；模型只能补低风险动作。
-- 普通对话**只调用一次**角色 Agent；导演只在关键节点出现。
-- **事件结果由证据判定**：证据不足 `pending`、超时 `abandoned`；模型的 outcome 只能落在证据允许的集合内。
-- 导演只能从 `storylets.eligible(state)` 里选，或选 `no_event`；选择前后都校验 `state_version`。
-- 读档 = 新分支；旧分支数据保留但当前上下文看不到。
-- 客户端只拿白名单 `scene_id/sprite_id` 和玩家可见文本；数值、事实名、角色秘密不下发。
+- `run_dev` 会直接报错并提示怎么填；
+- 直接启动后端会抛出 `RuntimeError: 未配置 LLM_API_KEY...`，不会静默降级成 mock。
 
 ---
 
-## 3. 角色 Agent 与导演怎么工作
+## 8. 怎么玩
 
-### 3.1 角色 Agent（每轮 1 次）
-
-```
-状态/记忆/最近对话/玩家这句话/当前事件
-   → 组装 prompt（人设定性描述 + 她已知/未知 + 已发生事实 + 记忆 + 最近 8 轮 + 当前事件 + 可选动作）
-   → DeepSeek /chat/completions（response_format=json_object，temperature 0.85，max_tokens 400）
-   → 解析 JSON → 校验：
-        · dialogue 非空、≤180 字、不含泄露词（好感度/数值/storylet/AI…）
-        · emotion 必须在枚举内
-        · actions 必须在白名单，且能在玩家这句话里找到依据
-        · storylet_outcome 必须在事件的 possible_outcomes 内
-   → 语气检查：命中"滚/少管/关你什么事"等攻击性词 → 要求重写一次 → 仍不改则模板兜底
-   → 失败（超时 / 坏 JSON / 违规）最多重试一次
-   → 规则提交状态 → 记录 llm_calls 指标 → 返回完整 JSON
-```
-
-Prompt 里明确要求：**先接住玩家这句话**，再让事件自然发生；每句台词留一个「能接的话头」
-（一个问题 / 没说完的动作 / 可追问的细节）；嘴硬可以，但不讽刺、不贬低、不赶人。
-
-### 3.2 导演（关键节点 1 次）
-
-```
-规则过滤出候选（场景 / 前置条件 / 是否用过）
-   → 导演 prompt：目标状态 + 已发生事实 + 最近对话 + 候选清单 + 节奏
-   → LLM 返回 {"choice": "事件 id 或 no_event", "reason": "一句话理由"}
-   → 校验 choice 必须属于候选；否则退回确定性打分
-   → 比对 state_version、再次确认候选仍合法 → 写入 scheduled_storylet
-   → 下一回合激活前再复核一次；失效则丢弃并记录
-```
-
-- 导演**不写状态、不代替角色说话、不决定结局**。
-- 失败/超时 → 确定性打分兜底，本回合对白不受影响。
-- 每次导演选择与理由都写进 `/events`（`kind=director`），方便复盘"为什么演这个"。
-
-### 3.3 建议回复
-
-`GET /interact` 的响应里带 2–4 条 `suggestions`（规则生成）：新局给「问她怎么了 / 聊分班」，
-误会进入讨论给「澄清误会」，校门口收尾给「说出心意 / 先说做朋友 / 给她时间」。
-它们只是**提示**：点一下把整句填进输入框，玩家可以改任意字再发，不改变自由输入的性质。
-
-### 3.4 UI
-
-- 女主站在画面正中；角色对白、旁白、建议回复、输入框、按钮全部在下方。
-- **旁白**：19px、不倾斜、浅冷色 `#b3c0d2`，与对白同字号但一眼能区分；聊天记录顶部有渐隐，旧消息不会露出半行字。
-- 右上角「聊天记录 (N)」按钮 → 从右侧展开记录抽屉（不遮挡人物）；点「收起」恢复输入。
-- **背景交代**：开场三句旁白交代「她最近疏远 / 桌上的分班意向表 / 玩家说过的那句话」；
-  关键事件激活时还会先播一句背景（`storylets.json` 的 `exposition`），玩家不用靠猜。
-
-![开场：背景交代在聊天记录里](docs/ui_chat_start.jpg)
-
-### 3.5 指标与消融
-
-- `GET /game/{id}/metrics` 返回：分 `purpose`（character / director）的调用数、失败数、
-  P50/P95/max 延迟、token，失败原因分布，以及本局进度与结局状态。指标不进玩家可见响应。
-- `tools/ablation.py` 用同一套玩家脚本跑三种配置（纯 LLM / +Storylet / +Director），
-  输出到 `docs/ABLATION.md`。实测结论：纯 LLM 只能收在 friends（没有机制把「那句话」摆上桌），
-  加上条件 Storylet 才能到 romance；导演改变的是事件顺序与理由，代价是多几次调用。
-
-### 3.6 对局记录
-
-一局结束（`ending_phase = committed`）时自动保存三份：
-
-| 存到哪 | 内容 |
-|---|---|
-| SQLite `game_records` | 按 `(game_id, branch_id)` 唯一的一行 JSON |
-| `backend/data/records/<game>_<branch>.json` | 机器可读：结局、最终状态、事实、目标、线索、事件链、LLM 指标、完整对话 |
-| `backend/data/records/<game>_<branch>.md` | 人可读：结局标题、时长、回合、关键状态、事件结果、逐句对话 |
-
-查询：
-
-```powershell
-GET /game/{game_id}/record              # 当前分支的记录
-GET /game/{game_id}/record?branch_id=b123456
-GET /records                            # 最近的对局记录列表
-```
-
-- 只保存一次（`INSERT OR REPLACE` 保证唯一）；
-- 保存失败不影响对局；`GET /record` 发现缺失会用当前状态与日志**重建并补存**；
-- 未结束时请求记录返回 `409 game_not_ended`；
-- 记录按分支隔离：读档产生的新分支会有自己的记录，旧分支记录保留。
-
-- Prompt 里**只给定性描述**（信任"较高"、亲近感"一般"），不给数字，模型就无从把数值当台词说出来。
-- 她"不知道的事"和"绝不能主动说的秘密"写在 system prompt 里，作为防线；真正的兜底仍是后端的泄露词过滤。
-- 每次调用的 `model / latency_ms / input_tokens / output_tokens` 会写进 `llm_calls` 表，`GET /game/{id}/events` 里能拿到汇总（角色与导演分开记 `purpose`）。
-- 想临时断网玩：把 `.env` 里 `ATB_LLM_MODE=mock`；导演会自动退回确定性打分。
+- 在底部输入框打字，`Enter` 发送；
+- 上方 chip 是可参考的说法，点击填入输入框，可自行修改；**点过的说法不会重复出现**；
+- 旁白页只显示旁白，点「继续」进入对话；对话页只显示她这一句 + 输入框；
+- `推进时间` 结束当前场景（例如从教室到校门口）；
+- `结束本局` 回到标题；
+- 右上角「聊天记录」展开完整对话；
+- `Esc` 打开存档菜单；读档会在服务端创建新分支。
 
 ---
 
-## 4. 目录结构
+## 9. 项目结构
 
 ```text
 AfterTheBell/
-├─ game/                      Ren'Py 客户端
-│  ├─ script.rpy              主流程：开局 → 对话循环 → 结局
-│  ├─ chat_screen.rpy         聊天面板 / 等待提示 / 离线提示 / 结局卡
-│  ├─ ai_client.rpy           唯一的 HTTP 出口 + 存档对齐
-│  ├─ options.rpy gui.rpy     标题、中文字体、菜单背景、关闭回滚
-│  ├─ images/                 游戏用美术（1280×720 背景 / 高 700 透明立绘）
-│  └─ fonts/                  思源黑体
-├─ art_source/                美术原图（高分辨率，可追溯）
-├─ backend/app/
-│  ├─ main.py                 FastAPI 入口 + CORS + 错误映射
-│  ├─ engine.py               一回合的完整编排
-│  ├─ schemas.py              对外 HTTP 契约（Pydantic）
-│  ├─ game_state.py           状态结构 / 数值上限 / 情绪→立绘映射
-│  ├─ db.py                   SQLite 持久化 + 乐观并发 + 幂等 + 指标
-│  ├─ content.py              内容加载与启动期校验
-│  ├─ rules/                  前置条件、回合判定、动作效果、事件结果、结局
-│  ├─ narrative/              Storylet 库、导演、调度
-│  ├─ agents/                 角色 Agent（mock / llm / prompt 组装）
-│  └─ memory/                 重要记忆写入与检索
-├─ content/                   可编辑的叙事内容（JSON / prompt）
-├─ tests/                     pytest（47 项）
-├─ tools/
-│  ├─ play.py                 终端模拟一局（不开 Ren'Py 也能验状态机）
-│  ├─ ablation.py             消融对照（纯 LLM / +Storylet / +Director）
-│  ├─ prepare_art.py          原图 → 游戏规格（背景/立绘/菜单图）
-│  └─ make_placeholder_art.py 无美术时的占位图生成
-├─ docs/                      M0–M3 验收记录 + 消融结果
-├─ run_dev.bat                一键启动（后端 + 游戏）
-└─ .env.example               复制成 .env 后填 LLM Key
+├─ game/                    Ren'Py 客户端
+│  ├─ script.rpy            入口、主循环、存档
+│  ├─ chat_screen.rpy       对话/旁白面板、聊天记录、结局卡
+│  ├─ ai_client.rpy         HTTP 客户端、状态同步
+│  └─ images/ gui/ fonts/   美术与字体
+├─ backend/
+│  ├─ app/
+│  │  ├─ main.py            FastAPI 入口
+│  │  ├─ engine.py          单回合编排
+│  │  ├─ db.py              SQLite 访问与迁移
+│  │  ├─ records.py         对局记录
+│  │  ├─ agents/            角色 Agent、prompt、mock/LLM
+│  │  ├─ narrative/         storylet、调度、导演
+│  │  └─ rules/             语义、动作、事实、结局、线索
+│  ├─ data/                 运行时数据库/记录（gitignored）
+│  └─ requirements.txt
+├─ content/                 storylets、goals、endings、角色设定
+├─ tests/                   pytest
+├─ tools/                   dev.py / setup_env.py / play.py / ablation.py
+├─ docs/                    设计与验收文档、截图
+├─ setup.bat / setup.command
+└─ run_dev.bat / run_dev.command
 ```
 
 ---
 
-## 5. 一回合发生了什么
+## 10. 测试
 
-```
-玩家输入
-  → POST /interact（带 request_id + expected_state_version）
-  → 读状态/记忆 → 激活已排期事件
-  → 解析输入（话题/意图/是否有效互动）——规则
-  → 角色 Agent（1 次 LLM；mock 模式下 0 次）
-  → 动作白名单提交（数值有每回合上限）——规则
-  → 事件收尾（结果由规则判定）——规则
-  → 回合计数 → 场景推进 → 目标/结局资格
-  → 必要时请导演选下一个事件（关键节点才调用；失败退回确定性打分）
-  → 乐观并发写入 SQLite（状态 + 快照 + 幂等响应同一事务）
-  → 返回完整 JSON → Ren'Py 渲染
-```
-
-导演（M2 才会接 LLM）只负责"下一个演什么"，且必须从 `storylets.eligible(state)` 里选；
-普通闲聊不触发规划，避免每轮多一次模型调用。
-
----
-
-## 6. 内容与规则在哪改
-
-| 想改什么 | 改哪里 |
-|---|---|
-| 许栀的人设、她知道/不知道什么 | `content/characters.json` |
-| 对白的口吻规则、禁止项 | `content/prompts/character_system.txt` + `backend/app/agents/prompts.py` |
-| 加/删事件、改触发条件 | `content/storylets.json`（DSL 见下） |
-| 事件的背景旁白 | `content/storylets.json` 的 `exposition` 数组 |
-| 开场旁白 | `backend/app/engine.py` 的 `OPENING_NARRATION` |
-| 事件每个走向的效果 | `backend/app/rules/storylet_resolution.py` 的 `OUTCOMES` 表 |
-| 结局门槛与结局文本 | `content/endings.json` |
-| 节奏（有效互动预算） | `content/narrative_goals.json` 的 `pacing` |
-| 动作效果数值 | `backend/app/rules/actions.py` |
-| 哪些话算"有效互动" | `backend/app/rules/meaningful_turn.py` |
-
-前置条件 DSL（内容写错会在**启动时**报错，不会静默放行）：
-
-```json
-{"all": [
-  {"eq": ["scene", "classroom"]},
-  {"gte": ["relationship.trust", 42]},
-  {"in": ["ending_phase", ["none", "eligible"]]},
-  {"flag": ["facts.misunderstanding_discussed", true]},
-  {"falsy": ["active_storylet"]}
-]}
-```
-
-支持：`all / any / not / eq / ne / gte / lte / gt / lt / in / flag / truthy / falsy /
-scene_in / turns_gte / ending_phase_in / active_storylet_none / scheduled_storylet_none`。
-
----
-
-## 7. 测试与自检
-
-```powershell
-# 规则 + 契约 + 三路线 + LLM 校验（测试会强制 mock，不烧 token）
+```bat
+:: Windows
 .venv\Scripts\python.exe -m pytest -q
 
-# Ren'Py 静态检查（不需要窗口）
-D:\renpy-8.6.0-sdk\renpy.exe D:\AfterTheBell lint
-
-# 终端模拟一局（会按 .env 决定用 LLM 还是 mock）
-.venv\Scripts\python.exe tools\play.py --route communicate --verbose
-.venv\Scripts\python.exe tools\play.py --route control
-.venv\Scripts\python.exe tools\play.py --route avoid
-
-# 消融对照（三种配置各跑一遍，输出 docs/ABLATION.md）
-.venv\Scripts\python.exe tools\ablation.py --routes communicate --out docs/ABLATION.md
-
-# 指标（后端起着时，把 <id> 换成实际 game_id）
-Invoke-RestMethod http://127.0.0.1:8756/game/<id>/metrics
-
-# 对局记录（结局后）
-Invoke-RestMethod http://127.0.0.1:8756/game/<id>/record
-Invoke-RestMethod http://127.0.0.1:8756/records
+:: macOS / Linux
+.venv/bin/python -m pytest -q
 ```
 
-### 客户端链路自检（可选）
+- **143 项**，全部在 mock 模式下运行，不需要 Key、不消耗 Token；
+- 覆盖：语义反例（否定/引用/疑问/假设）、事件证据与放弃、读档分支隔离、结局门槛、NPC 主动意图、目标谓词、对局记录、解释识别、同行邀请宽限等；
+- 真实模型手测：`tools/play.py --route communicate|control|avoid`（需要后端和 Key）。
 
-后端起着的时候：
+### 客户端自检（可选）
 
 ```powershell
 $env:ATB_SELFCHECK = "1"
-D:\renpy-8.6.0-sdk\renpy.exe D:\AfterTheBell
+# 启动后端后运行 Ren'Py
+renpy.exe .
 Get-Content game\selfcheck.txt
 ```
 
-会真实跑一遍"启动 → 发一句话 → 推进时间 → 渲染聊天面板 → 渲染结局卡 → 退出"。
+会跑一遍“启动 → 发一句话 → 推进时间 → 渲染面板/记录/结局卡 → 退出”。
 
 ---
 
-## 8. 已知限制
+## 11. 内容怎么改
 
-1. **没有流式输出**：一次请求返回完整 JSON；角色单轮约 1.5–2.5 秒，界面只有"正在回复"提示。
-2. **语义是规则 + 小句启发式**：反讽、长复句、方言式表达可能漏判；漏判时偏保守（不提交事实）。
-3. **NPC 主动意图只在 LLM 模式生效**：Mock 模式为了确定性测试不产生主动行为。
-4. **导演是请求内同步执行**：只在关键节点（约每 2–3 轮一次）多 1–2 秒等待。
-5. **线索状态由 facts 推导**：新增事实时需要同步更新 `rules/threads._compute` 的映射。
-6. **建议回复是规则生成的**：同一状态下句子固定，可能重复；它只是提示，不是选项。
-7. **存档**：关掉 Ren'Py 回滚；读档会创建新分支，旧分支保留但不再参与上下文。
-8. **中文输入法**：走 Ren'Py 的 IME 输入，未在 Web 版验证。
-9. **真人时长未测**：脚本路线约 10–11 轮；15–20 分钟的目标体验还需要真人试玩确认。
-10. **成本**：角色每轮 prompt ≈1.3–1.5k tokens；导演每次 ≈300–500 tokens，约每 2–3 轮一次。测试不烧 token（强制 mock）。
+| 文件 | 内容 |
+|---|---|
+| `content/storylets.json` | 事件、前置条件、可能的走向、背景旁白 |
+| `content/narrative_goals.json` | 叙事目标与 `progress_if` / `done_if` 谓词 |
+| `content/endings.json` | 三种结局的门槛与文本 |
+| `content/characters.json` | 角色人设、说话方式、秘密 |
+| `content/prompts/` | 角色 system prompt |
 
----
-
-## 9. 路线图
-
-M0–M3 与 v0.3 已交付。剩余工作：
-
-- **真人 15–20 分钟时长测试**与节奏微调。
-- 导演异步化（返回后台规划 + 下一轮激活前复核）。
-- Web 端适配（`renpy.fetch`、中文输入、CORS/HTTPS）。
-- 语义层可选升级（LLM 辅助意图判定，仍由规则白名单兜底）。
+改完先跑 `pytest`，再用 `tools/play.py` 跑三条路线。
 
 ---
 
-## 10. 依赖与许可
+## 12. API 与对局记录
 
-- Ren'Py 8.6（`D:\renpy-8.6.0-sdk`），字体 SourceHanSansLite（SIL OFL）。
-- 后端：FastAPI / Pydantic / uvicorn / httpx / pytest / Pillow。
-- 美术：`art_source/` 为原图，`game/images/` 为游戏规格图；占位图脚本保留在 `tools/make_placeholder_art.py`。
+常用接口：
+
+```text
+POST /game/start
+POST /game/{id}/interact
+POST /game/{id}/advance
+GET  /game/{id}/state
+GET  /game/{id}/events
+GET  /game/{id}/metrics
+GET  /game/{id}/record
+GET  /records
+POST /game/{id}/restore/{version}
+```
+
+结局后记录会写到：
+
+- SQLite `game_records` 表；
+- `backend/data/records/<game>_<branch>.json`
+- `backend/data/records/<game>_<branch>.md`（含完整对话，适合复盘）
+
+---
+
+## 13. 常见问题
+
+**Q：启动时提示“未配置 LLM_API_KEY”**
+复制 `.env.example` 为 `.env`，填入 DeepSeek Key；确认没有多余引号/空格。
+
+**Q：提示“没有找到 Ren'Py SDK”**
+安装 Ren'Py 8.6，设置 `RENPY_HOME` 指向 SDK 根目录（里面有 `renpy.exe` / `renpy.sh`）。
+
+**Q：macOS 双击 `.command` 没反应**
+先 `chmod +x setup.command run_dev.command`；再右键 → 打开。仍不行看“隐私与安全性”。
+
+**Q：端口 8756 被占用**
+在 `.env` 里改 `ATB_PORT`，并确认没有另一个后端在跑。
+
+**Q：游戏显示“连不上后端”**
+看启动器所在终端；常见是 Key 未填、依赖未装、端口冲突。
+
+**Q：API 报 401/429**
+Key 无效或额度不足；到 DeepSeek 控制台检查。API 失败时角色会走兜底台词，但体验不完整。
+
+**Q：能不用 Key 玩吗？**
+不能。`mock` 仅供测试；正式游玩必须配置 Key。
+
+**Q：Windows 终端中文乱码？**
+用 `run_dev.bat`（内部已 `chcp 65001`）；手动运行时先执行 `chcp 65001`。
+
+---
+
+## 14. 已知限制
+
+- 目前是**一天、一个女主、9 个事件、3 个结局**的 Demo，完整时长约 15 分钟；
+- 语义解析是规则 + 小句启发式，长复句/反讽可能漏判；
+- 上下文窗口较短（最近若干条流水 + 记忆），长局靠 facts/记忆延续；
+- 导演同步调用，关键回合多 1–2 秒；
+- 没有流式输出、语音、移动端/Web；
+- 测试以 mock 为主，真实 LLM 存在随机性，已用 `tools/play.py` 做手测。
+
+## 15. 许可
+
+仓库暂未附带 LICENSE 文件。如果你希望以 MIT / Apache-2.0 等方式开源，请补充 `LICENSE` 并在 GitHub 的 About 里选择对应许可。
+
+## 16. 致谢
+
+- [Ren'Py](https://www.renpy.org/)：视觉小说引擎
+- [FastAPI](https://fastapi.tiangolo.com/) / [Pydantic](https://docs.pydantic.dev/)
+- [DeepSeek](https://www.deepseek.com/)：对白与导演模型
+- 字体：Source Han Sans（SIL OFL）

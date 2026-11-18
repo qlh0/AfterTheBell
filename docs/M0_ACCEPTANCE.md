@@ -33,7 +33,7 @@ $ .venv\Scripts\python.exe -m pytest -q
 ### Ren'Py lint
 
 ```text
-$ D:\renpy-8.6.0-sdk\renpy.exe D:\AfterTheBell lint
+$ renpy.exe <repo> lint
 Ren'Py 8.6.0.26111403 lint report
 Statistics: 0 menus, 5 images, 28 screens
 lint_exit=0
@@ -42,7 +42,7 @@ lint_exit=0
 ### 客户端链路自检（真实窗口 + 真实 HTTP）
 
 ```powershell
-$env:ATB_SELFCHECK = "1"; D:\renpy-8.6.0-sdk\renpy.exe D:\AfterTheBell
+$env:ATB_SELFCHECK = "1"; renpy.exe <repo>
 ```
 
 `game/selfcheck.txt`：

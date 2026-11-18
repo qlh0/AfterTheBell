@@ -9,13 +9,13 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]          # D:\AfterTheBell
+ROOT = Path(__file__).resolve().parents[2]          # repository root (contains backend/, game/, content/)
 
-# .env 只在本机读取；不存在时静默跳过（M0 全部走 mock）。
+# .env 只在本机读取；默认要求配置真实 Key。
 try:
     from dotenv import load_dotenv
 
-    load_dotenv(ROOT / ".env")
+    load_dotenv(ROOT / ".env", encoding="utf-8")
 except Exception:  # pragma: no cover - 缺少 dotenv 时不影响运行
     pass
 
@@ -30,9 +30,10 @@ DB_PATH = Path(os.environ.get("ATB_DB_PATH", DATA_DIR / "after_the_bell.db"))
 HOST = os.environ.get("ATB_HOST", "127.0.0.1")
 PORT = int(os.environ.get("ATB_PORT", "8756"))
 
-# mock: 不联网，用模板对白（M0 默认）
-# llm:  调用 OpenAI 兼容接口（M1）
-LLM_MODE = os.environ.get("ATB_LLM_MODE", "mock").strip().lower()
+# llm:  正式游玩，调用 OpenAI 兼容接口（必须配置 LLM_API_KEY）
+# mock: 仅自动化测试/离线开发，需显式设置 ATB_ALLOW_MOCK=1
+LLM_MODE = os.environ.get("ATB_LLM_MODE", "llm").strip().lower()
+ALLOW_MOCK = os.environ.get("ATB_ALLOW_MOCK", "0").strip() == "1"
 
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
@@ -66,6 +67,26 @@ LIMITS = Limits()
 
 def llm_configured() -> bool:
     return bool(LLM_API_KEY) and LLM_MODE == "llm"
+
+
+_PLACEHOLDER_KEYS = {"", "sk-...", "your-api-key", "your_key_here", "changeme"}
+
+
+def validate_runtime() -> None:
+    """Fail fast with an actionable message instead of silently using mock."""
+    if LLM_MODE == "mock":
+        if not ALLOW_MOCK:
+            raise RuntimeError(
+                "mock 模式仅供自动化测试/离线开发；正式游玩请设置 ATB_LLM_MODE=llm "
+                "并在 .env 中填写 LLM_API_KEY。"
+            )
+        return
+    if LLM_MODE != "llm":
+        raise RuntimeError(f"未知的 ATB_LLM_MODE：{LLM_MODE}（可选 llm / mock）")
+    if LLM_API_KEY.strip().lower() in _PLACEHOLDER_KEYS:
+        raise RuntimeError(
+            "未配置 LLM_API_KEY。请把 .env.example 复制为 .env，并填写你的 DeepSeek API Key。"
+        )
 
 
 @dataclass

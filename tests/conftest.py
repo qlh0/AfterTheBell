@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 
 os.environ["ATB_LLM_MODE"] = "mock"
+os.environ["ATB_ALLOW_MOCK"] = "1"
 os.environ.pop("LLM_API_KEY", None)
 
 import pytest  # noqa: E402

@@ -19,10 +19,11 @@ from .db import Database
 from .engine import Engine, EndingCommitted, GameNotEnded, GameNotFound, VersionConflict
 from .schemas import AdvanceRequest, InteractRequest, StartRequest
 
-API_VERSION = "0.3.0-m0"
+API_VERSION = "0.3.2"
 
 
 def create_app(db: Database | None = None) -> FastAPI:
+    config.validate_runtime()
     database = db or Database()
     engine = Engine(database)
 

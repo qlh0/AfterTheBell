@@ -92,10 +92,10 @@ $ .venv\Scripts\python.exe -m pytest -q
 ### 2.5 Ren'Py 客户端（LLM 模式）
 
 ```text
-$ D:\renpy-8.6.0-sdk\renpy.exe D:\AfterTheBell lint
+$ renpy.exe <repo> lint
 Statistics: 0 menus, 5 images, 28 screens        [exit=0]
 
-$ $env:ATB_SELFCHECK="1"; D:\renpy-8.6.0-sdk\renpy.exe D:\AfterTheBell
+$ $env:ATB_SELFCHECK="1"; renpy.exe <repo>
 health: mode=llm configured=True model=deepseek-chat
 boot=True
 start_err=None
