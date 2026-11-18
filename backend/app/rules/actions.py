@@ -73,6 +73,11 @@ ACTIONS: dict[str, dict[str, Any]] = {
         "relationship": {"respect_for_autonomy": 2, "trust": 1},
         "facts": ["class_change_discussed"],
     },
+    "reassure_future": {
+        "label": "安慰她：分班不会改变你们的关系",
+        "relationship": {"respect_for_autonomy": 2, "trust": 1},
+        "facts": [],
+    },
     "promise": {
         "label": "给出承诺",
         "relationship": {"trust": 2},

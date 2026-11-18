@@ -65,7 +65,8 @@ ACTION_RULES: dict[str, dict[str, Any]] = {
         "ignore_negation": True,  # 「不要为了我」本身含否定词，但意思是支持
     },
     "explain_own_words": {
-        "keywords": ("不是那个意思", "我是说", "我当时", "我说的是", "你别误会", "不是说你"),
+        "keywords": ("不是那个意思", "我是说", "我当时", "我说的是", "我说的不是",
+                     "你别误会", "不是说你", "不是在说你", "我是在说", "是在说"),
         "allow_question": False,
         "ignore_negation": True,
     },
@@ -120,6 +121,14 @@ ACTION_RULES: dict[str, dict[str, Any]] = {
         # 关键词只是入口，真正判定见 analyze()：必须同时谈「分班计划」和「以后」
         "keywords": (),
         "allow_question": True,
+    },
+    "reassure_future": {
+        # 「就算不在一个班，也还是一个学校 / 还能见」这类安慰，算尊重与信任
+        "keywords": ("不管分不分班", "分不分班", "就算不在一个班", "不在一个班",
+                     "还是一个学校", "在一个学校", "还能见", "也能见", "能见", "不会断",
+                     "一起走", "不会变"),
+        "allow_question": False,
+        "allow_hypothetical": True,
     },
 }
 
@@ -240,7 +249,7 @@ def _match_action(clause: str, action: str, spec: dict[str, Any]) -> str | None:
         return None
     if _other_subject(clause):
         return "rejected"
-    if _is_hypothetical(clause):
+    if _is_hypothetical(clause) and not spec.get("allow_hypothetical", False):
         return "candidate" if not spec.get("high_impact", True) else "rejected"
     if _is_question(clause) and not spec.get("allow_question", False):
         return "rejected"

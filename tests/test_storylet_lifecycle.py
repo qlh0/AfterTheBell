@@ -45,8 +45,15 @@ def test_walk_home_not_completed_by_unrelated_line(engine):
     engine.interact(gid, "作业写完了吗？", "req_life_0000001")
     state = engine.get_state(gid, include_internal=True)["state"]
     assert state["facts"]["walk_home_done"] is False
+    # 邀请当轮只铺情境，留一轮给玩家回应
+    assert state["active_storylet"] == "walk_home"
+    assert not [e for e in _events(engine, gid, "resolved") if e["event_id"] == "walk_home"]
+
+    engine.interact(gid, "作业写完了吗？", "req_life_0000002")
+    state = engine.get_state(gid, include_internal=True)["state"]
     resolved = [e for e in _events(engine, gid, "resolved") if e["event_id"] == "walk_home"]
-    assert resolved and resolved[0]["payload"]["outcome"] != "walked_together"
+    assert resolved and resolved[0]["payload"]["outcome"] == "walked_apart"
+    assert state["facts"]["walk_home_done"] is False
 
 
 def test_class_choice_not_completed_by_care(engine):

@@ -223,7 +223,8 @@ def evaluate(
             return Progress("walked_together", "玩家明确接受同行")
         if ev.get("player_declined"):
             return Progress("walked_apart", "玩家拒绝或先走了")
-        if turns >= 1:
+        # 激活当轮只算“邀请已发出”；至少留一轮给玩家回应，再判各自离开
+        if turns >= 2:
             return Progress("walked_apart", "玩家没有回应邀请，各自离开")
         return Progress(None, "等她/玩家表态")
 
@@ -310,7 +311,7 @@ def allowed_outcomes(
             return {"walked_together"}
         if ev.get("player_declined"):
             return {"walked_apart", "declined"}
-        if turns >= 1:
+        if turns >= 2:
             return {"walked_apart"}
         return set()
 
