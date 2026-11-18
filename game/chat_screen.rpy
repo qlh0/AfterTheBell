@@ -78,12 +78,13 @@ screen chat_ui():
                             use chat_entry(item)
 
     else:
-        ## ---------------- 底部对话面板（高度随当前文字自适应） ----------------
+        ## ---------------- 底部对话面板（固定高度，留白一致） ----------------
         frame:
             background Solid("#0a0e16f0")
             xfill True
             yalign 1.0
-            padding (24, 10)
+            ysize 236
+            padding (24, 14)
 
             vbox:
                 spacing 6
