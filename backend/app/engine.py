@@ -117,12 +117,32 @@ class Engine:
         events: list[dict[str, Any]] = []
         memories: list[dict[str, Any]] = []
 
-        # 1. 新回合开始：激活已排期事件（或直接进入 finale）
+        # 1. 新回合开始：激活已排期事件（或进入收束/finale）
+        before_scene = state["scene"]
+        before_day = int(state.get("day", 1))
+        analysis = meaningful_turn.analyze(text)
         activation = None
-        if config.STORYLETS_ENABLED:
-            activation = scheduler.try_activate(state, self.content.storylets)
+        if config.STORYLETS_ENABLED and state["ending_phase"] != "committed":
+            hard_due = state["turn_index"] >= int(state["budget"]["hard_end_at"]) - 2
+            if hard_due:
+                moved, closure = self._force_closure_if_due(state)
+                if closure:
+                    narration.append(closure)
+                activation = scheduler.force_finale(state, self.content.storylets)
+            else:
+                # 玩家明确说「去图书馆/走廊/小卖部」时，优先于排期事件
+                activation = scheduler.trigger_by_text(
+                    state, self.content.storylets, analysis.normalized
+                )
+                if activation is None:
+                    activation = scheduler.try_activate(state, self.content.storylets)
+
+        # 2. 玩家输入解析已完成（规则，不依赖模型）
+
         if activation is not None:
             narration.extend(activation.exposition)
+            if activation.storylet.enter_narration:
+                narration.append(activation.storylet.enter_narration)
             narration.append(activation.cue)
             changes.append({
                 "path": "active_storylet",
@@ -130,6 +150,13 @@ class Engine:
                 "after": activation.storylet.id,
                 "reason": f"activated:{activation.how}",
             })
+            if state["scene"] != before_scene or int(state.get("day", 1)) != before_day:
+                changes.append({
+                    "path": "scene",
+                    "before": f"day{before_day}:{before_scene}",
+                    "after": f"day{state.get('day', 1)}:{state['scene']}",
+                    "reason": f"scene:{activation.how}",
+                })
             events.append({
                 "event_id": activation.storylet.id,
                 "kind": "storylet",
@@ -138,9 +165,6 @@ class Engine:
             })
 
         active = self.content.storylets.get(state["active_storylet"])
-
-        # 2. 解析玩家输入（规则，不依赖模型）
-        analysis = meaningful_turn.analyze(text)
 
         # 3. 角色回复：普通对话只在这里调用一次 Agent
         expected_ending = None
@@ -194,6 +218,7 @@ class Engine:
                     resolution = ending_rules.resolve(state, self.content)
                     changes.extend(resolution.changes)
                     ending_block = ending_rules.ending_block(state, self.content)
+                    narration.append("她说完最后一句，没有再躲开你的视线。")
                     resolved_id = active.id
                     resolved_set.append(active.id)
                     state["last_storylet_resolved_turn"] = state["turn_index"]
@@ -230,6 +255,8 @@ class Engine:
                         changes.extend(resolution.changes)
                         narration.extend(resolution.narration)
                         scheduler.clear_active(state)
+                        if self._restore_scene(state) and active.enter_scene:
+                            narration.append("你们回到校门口，天色又暗了一点。")
                         resolved_id = active.id
                         resolved_set.append(active.id)
                         state["last_storylet_resolved_turn"] = state["turn_index"]
@@ -261,6 +288,8 @@ class Engine:
                             "turn": state["turn_index"],
                         })
                         scheduler.clear_active(state)
+                        if self._restore_scene(state) and active.enter_scene:
+                            narration.append("你们回到校门口，天色又暗了一点。")
                         narration.append("她没再继续这个话题。")
                         events.append({
                             "event_id": active.id, "kind": "storylet", "status": "abandoned",
@@ -278,22 +307,23 @@ class Engine:
         if analysis.is_meaningful:
             state["meaningful_turns"] += 1
 
-        # 7. 场景推进：放学了就该走，避免玩家永远困在教室
-        moved = False
-        if state["scene"] == "classroom" and (
-            "leave" in analysis.topics or gs.progress(state) >= 5
-        ):
-            state["scene"] = "school_gate"
-            moved = True
-            narration.append("你们收好各自的东西，一前一后下了楼。校门口的路灯刚亮。")
+        # 7. 场景推进：保证第一天的校门口、第二天的教室/校门口自然出现
+        before_scene, before_day = state["scene"], int(state.get("day", 1))
+        moved, scene_text = self._maybe_auto_advance(state, analysis)
+        if moved:
+            narration.append(scene_text)
             changes.append({
                 "path": "scene",
-                "before": "classroom",
-                "after": "school_gate",
-                "reason": "after_school",
+                "before": f"day{before_day}:{before_scene}",
+                "after": f"day{state.get('day', 1)}:{state['scene']}",
+                "reason": "auto_time",
             })
-            events.append({"event_id": "scene_transition", "kind": "scene", "status": "committed",
-                           "payload": {"to": "school_gate"}})
+            events.append({
+                "event_id": "scene_transition",
+                "kind": "scene",
+                "status": "committed",
+                "payload": {"day": state.get("day", 1), "to": state["scene"]},
+            })
 
         # 8. 目标与结局资格
         changes.extend(goal_rules.record_goal_progress(state, self.content))
@@ -340,7 +370,7 @@ class Engine:
                     },
                 })
 
-        # 9.5 兜底收束：没有可用事件（或消融对照关掉 Storylet）时，也不能无限聊下去
+        # 9.5 硬上限兜底：第 22 轮必须结束；先保证第二天校门口 + 一句收束旁白
         force_at = (
             int(state["budget"]["soft_end_at"])
             if not config.STORYLETS_ENABLED
@@ -349,15 +379,22 @@ class Engine:
         if state["ending_phase"] != "committed" and (
             gs.progress(state) >= force_at or state["turn_index"] >= force_at
         ):
+            moved, closure = self._force_closure_if_due(state)
+            if closure:
+                narration.append(closure)
             resolution = ending_rules.resolve(state, self.content)
             changes.extend(resolution.changes)
             ending_block = ending_rules.ending_block(state, self.content)
-            narration.append("天已经完全黑下来了，你们站在校门口，谁都没有先走。")
+            narration.append("她看着你，像是终于把憋了很久的话说完了。")
             events.append({
                 "event_id": "forced_finale",
                 "kind": "ending",
                 "status": "committed",
-                "payload": {"reason": "hard_end_without_finale", "ending": state["ending_id"]},
+                "payload": {
+                    "reason": "hard_end_without_finale",
+                    "ending": state["ending_id"],
+                    "closure": True,
+                },
             })
 
         # 9.6 线索状态与事实对齐（幂等；读档分支自带快照）
@@ -424,26 +461,51 @@ class Engine:
         changes: list[dict[str, Any]] = []
         events: list[dict[str, Any]] = []
 
-        if state["scene"] == "classroom" or intent == "leave_classroom":
-            if state["scene"] != "school_gate":
-                state["scene"] = "school_gate"
-                narration.append("你们收好各自的东西，一前一后下了楼。校门口的路灯刚亮。")
-                changes.append({"path": "scene", "before": "classroom", "after": "school_gate",
-                                "reason": "player_advance"})
+        before_scene = state["scene"]
+        before_day = int(state.get("day", 1))
+        if state.get("active_storylet"):
+            narration.append("她还在等你说完，现在先不急着换地方。")
+        else:
+            moved, scene_text = self._advance_main_scene(state)
+            if moved:
+                narration.append(scene_text)
+                changes.append({
+                    "path": "scene",
+                    "before": f"day{before_day}:{before_scene}",
+                    "after": f"day{state.get('day', 1)}:{state['scene']}",
+                    "reason": "player_advance",
+                })
+                events.append({
+                    "event_id": "scene_transition",
+                    "kind": "scene",
+                    "status": "committed",
+                    "payload": {"day": state.get("day", 1), "to": state["scene"]},
+                })
+            else:
+                narration.append("今天已经没有别的安排了。你们在校门口又站了一会儿。")
 
         activation = None
-        if config.STORYLETS_ENABLED:
+        if config.STORYLETS_ENABLED and not state.get("active_storylet"):
             activation = scheduler.try_activate(state, self.content.storylets)
         planning_status = "not_required"
         if activation is not None:
             narration.extend(activation.exposition)
+            if activation.storylet.enter_narration:
+                narration.append(activation.storylet.enter_narration)
             narration.append(activation.cue)
             changes.append({"path": "active_storylet", "before": None,
                             "after": activation.storylet.id, "reason": f"activated:{activation.how}"})
+            if state["scene"] != before_scene or int(state.get("day", 1)) != before_day:
+                changes.append({
+                    "path": "scene",
+                    "before": f"day{before_day}:{before_scene}",
+                    "after": f"day{state.get('day', 1)}:{state['scene']}",
+                    "reason": f"scene:{activation.how}",
+                })
             events.append({"event_id": activation.storylet.id, "kind": "storylet",
                            "status": "activated", "payload": {"how": activation.how}})
             planning_status = "activated"
-        else:
+        elif not state.get("active_storylet"):
             plan = scheduler.plan_next(
                 state,
                 self.content.storylets,
@@ -676,6 +738,78 @@ class Engine:
             branch_id=branch_id,
         )
 
+    def _advance_main_scene(self, state: dict[str, Any]) -> tuple[bool, str]:
+        """主场景推进：教室 → 校门口 → 第二天教室 → 第二天校门口。"""
+        day = int(state.get("day", 1))
+        scene = state["scene"]
+        if scene in gs.OPTIONAL_SCENES:
+            target = (day, state.get("return_scene") or "school_gate")
+        else:
+            target = gs.SCENE_FLOW.get((day, scene))
+        if target is None:
+            return False, ""
+        new_day, new_scene = target
+        state["day"] = new_day
+        state["scene"] = new_scene
+        state["return_scene"] = None
+        if new_day != day:
+            return True, "第二天放学后，教室里只剩下你们两个。窗外的光比昨天暗得早一些。"
+        if day == 1 and scene == "classroom" and new_scene == "school_gate":
+            return True, "放学铃响过，你们收好书包，一前一后下了楼。校门口的路灯刚亮。"
+        if day == 2 and scene == "classroom" and new_scene == "school_gate":
+            return True, "第二天傍晚，你们收好书包下楼。校门口的路灯一盏一盏亮起来。"
+        if scene == "classroom" and new_day == 2:
+            return True, "第二天放学后，教室里只剩下你们两个。"
+        if scene == "school_gate" and new_scene == "classroom":
+            return True, "第二天放学后，教室里只剩下你们两个。"
+        return True, "你们回到校门口，风把白天的热气吹散了。"
+
+    def _maybe_auto_advance(self, state: dict[str, Any], analysis: Any) -> tuple[bool, str]:
+        """保证第一天校门口、第二天教室、第二天校门口在预算内自然出现。"""
+        if state.get("active_storylet"):
+            return False, ""
+        day = int(state.get("day", 1))
+        scene = state["scene"]
+        p = gs.progress(state)
+        if scene in gs.OPTIONAL_SCENES:
+            return False, ""
+        if (day, scene) == (1, "classroom") and (
+            "leave" in analysis.topics or p >= 5 or state["turn_index"] >= 5
+        ):
+            return self._advance_main_scene(state)
+        if (day, scene) == (1, "school_gate") and (
+            p >= 10 or state["turn_index"] >= 10
+        ):
+            return self._advance_main_scene(state)
+        if (day, scene) == (2, "classroom") and (
+            p >= 15 or state["turn_index"] >= 15
+        ):
+            return self._advance_main_scene(state)
+        return False, ""
+
+    def _restore_scene(self, state: dict[str, Any]) -> bool:
+        return_scene = state.get("return_scene")
+        if not return_scene:
+            return False
+        state["scene"] = return_scene
+        state["return_scene"] = None
+        return True
+
+    def _force_closure_if_due(self, state: dict[str, Any]) -> tuple[bool, str]:
+        """第 22 轮前必须把场景拉到第二天校门口，并留一段收束对话。"""
+        if state.get("ending_phase") == "committed":
+            return False, ""
+        hard = int(state["budget"]["hard_end_at"])
+        if state["turn_index"] < hard - 2:
+            return False, ""
+        scene_changed = state.get("scene") != "school_gate" or int(state.get("day", 1)) != 2
+        state["day"] = 2
+        state["scene"] = "school_gate"
+        state["return_scene"] = None
+        if scene_changed:
+            return True, "第二天傍晚，你们又站到了校门口。天已经暗下来，谁都没有先走。"
+        return False, ""
+
     def _turn_view(self, state: dict[str, Any]) -> dict[str, Any]:
         return {
             "index": state["turn_index"],
@@ -689,6 +823,8 @@ class Engine:
         # goals 属于系统信息，默认不下发给玩家可见层
         return {
             "scene": state["scene"],
+            "day": int(state.get("day", 1)),
+            "day_label": gs.DAY_LABELS[int(state.get("day", 1))],
             "ending_phase": state["ending_phase"],
             "ending_id": state["ending_id"],
             "turn": self._turn_view(state),
@@ -698,8 +834,14 @@ class Engine:
 
     def _presentation(self, state: dict[str, Any]) -> dict[str, Any]:
         emotion = state["npc"]["current_emotion"]
+        scene_id = state["scene"]
+        day = int(state.get("day", 1))
+        if day == 2 and scene_id in ("classroom", "school_gate"):
+            scene_id = f"{scene_id}_day2"
         return {
-            "scene_id": state["scene"],
+            "scene_id": scene_id,
+            "day": day,
+            "day_label": gs.DAY_LABELS[day],
             "sprite_id": gs.sprite_for(emotion),
             "event_title": None,
             "event_badge": False,

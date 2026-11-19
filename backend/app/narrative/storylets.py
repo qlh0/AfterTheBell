@@ -29,6 +29,11 @@ class Storylet:
     scene_lock: str | None
     exposition: tuple[str, ...] = ()
     variants: tuple[dict[str, Any], ...] = ()
+    manual_only: bool = False
+    trigger_keywords: tuple[str, ...] = ()
+    enter_scene: str | None = None
+    return_scene: str | None = None
+    enter_narration: str = ""
 
     def as_prompt_dict(self) -> dict[str, Any]:
         """给导演/角色 prompt 的裁剪版：不含内部判定逻辑。"""
@@ -60,6 +65,12 @@ class StoryletLibrary:
             for key in ("title", "narrative_goal", "opening_cue", "narrative_hint", "possible_outcomes"):
                 if not raw.get(key):
                     raise ValueError(f"storylet {sid} 缺少 {key}")
+            enter_scene = raw.get("enter_scene")
+            if enter_scene and enter_scene not in gs.SCENES:
+                raise ValueError(f"storylet {sid} enter_scene 非法: {enter_scene}")
+            return_scene = raw.get("return_scene")
+            if return_scene and return_scene not in gs.SCENES:
+                raise ValueError(f"storylet {sid} return_scene 非法: {return_scene}")
             items.append(
                 Storylet(
                     id=sid,
@@ -77,6 +88,11 @@ class StoryletLibrary:
                     scene_lock=raw.get("scene_lock"),
                     exposition=tuple(raw.get("exposition", []) or []),
                     variants=tuple(raw.get("variants", []) or []),
+                    manual_only=bool(raw.get("manual_only", False)),
+                    trigger_keywords=tuple(raw.get("trigger_keywords", []) or []),
+                    enter_scene=raw.get("enter_scene"),
+                    return_scene=raw.get("return_scene"),
+                    enter_narration=raw.get("enter_narration", ""),
                 )
             )
         if not items:
@@ -99,6 +115,8 @@ class StoryletLibrary:
         active = state.get("active_storylet")
         out: list[Storylet] = []
         for storylet in self.all():
+            if storylet.manual_only:
+                continue
             if storylet.once and storylet.id in used:
                 continue
             if storylet.id == active:
@@ -114,3 +132,19 @@ class StoryletLibrary:
 
     def is_still_eligible(self, storylet_id: str, state: dict[str, Any]) -> bool:
         return any(s.id == storylet_id for s in self.eligible(state))
+
+    def manual_eligible(self, state: dict[str, Any]) -> list[Storylet]:
+        """可由玩家一句话触发的插曲事件（不进入导演候选池）。"""
+        used = set(state.get("used_storylets") or [])
+        out: list[Storylet] = []
+        for storylet in self.all():
+            if not storylet.manual_only:
+                continue
+            if storylet.once and storylet.id in used:
+                continue
+            if state["scene"] not in storylet.allowed_scenes:
+                continue
+            if not preconditions.evaluate(storylet.preconditions, state):
+                continue
+            out.append(storylet)
+        return out

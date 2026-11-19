@@ -182,6 +182,66 @@ OUTCOMES: dict[str, dict[str, dict[str, Any]]] = {
             "mem": ("episode", "没说完的话还是没说完。", 2, ["unfinished"]),
         },
     },
+    "library_study": {
+        "studied_together": {
+            "rel": {"trust": 3, "affection": 3},
+            "facts": ["library_visited"],
+            "narr": ["你们在靠窗的位置坐下，她把练习册往你那边推了推。"],
+            "mem": ("episode", "放学后一起去图书馆学习，聊到了她最近的心事。", 4, ["library"]),
+        },
+        "studied_quietly": {
+            "rel": {"trust": 2, "affection": 2},
+            "facts": ["library_visited"],
+            "narr": ["图书馆里很安静，只有翻书和笔尖的声音。"],
+            "mem": ("episode", "两人在图书馆安静地待了一会儿。", 3, ["library"]),
+        },
+        "left_early": {
+            "rel": {"affection": -1},
+            "facts": ["library_visited"],
+            "narr": ["她把刚翻开的书又合上了。"],
+            "mem": ("episode", "图书馆没坐多久就离开了。", 2, ["library"]),
+        },
+    },
+    "corridor_chat": {
+        "chatted": {
+            "rel": {"trust": 2, "affection": 2},
+            "facts": ["corridor_chatted"],
+            "narr": ["走廊里人来人往，她往窗边靠了靠，给你让出一点位置。"],
+            "mem": ("episode", "两个人在走廊里聊了几句，比在教室里更近。", 4, ["corridor"]),
+        },
+        "awkward": {
+            "rel": {"affection": 1},
+            "facts": ["corridor_chatted"],
+            "narr": ["走廊的灯亮着，你们谁都没先开口。"],
+            "mem": ("episode", "走廊里的对话有点尴尬。", 2, ["corridor"]),
+        },
+        "interrupted": {
+            "rel": {},
+            "facts": ["corridor_chatted"],
+            "narr": ["她顺着你的话往楼梯口看了一眼。"],
+            "mem": ("episode", "走廊的话还没说完就散了。", 2, ["corridor"]),
+        },
+    },
+    "shop_trip": {
+        "bought_together": {
+            "rel": {"trust": 2, "affection": 3},
+            "facts": ["shop_visited"],
+            "narr": ["她在货架前挑了很久，最后拿了两瓶一样的饮料。"],
+            "mem": ("episode", "一起去了小卖部，她顺手给你带了一瓶。", 4, ["shop"]),
+        },
+        "ran_into_classmate": {
+            "rel": {"trust": 1, "affection": 1},
+            "facts": ["shop_visited", "chenyu_mentioned"],
+            "narr": ["小卖部门口有人喊她名字，她应了一声，气氛被打断了。"],
+            "mem": ("episode", "小卖部里碰见了同学，没待太久。", 3, ["shop", "chenyu"]),
+        },
+        "went_alone": {
+            "rel": {"affection": -1},
+            "facts": ["shop_visited"],
+            "narr": ["她最后只买了一瓶水，先一步走出了小卖部。"],
+            "mem": ("episode", "小卖部之行各买各的。", 2, ["shop"]),
+        },
+    },
 }
 
 

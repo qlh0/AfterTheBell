@@ -21,11 +21,11 @@ def _state(content) -> dict:
     return state
 
 
-def test_budget_is_14(content):
-    assert content.budget() == 14
+def test_budget_is_19(content):
+    assert content.budget() == 19
     state = _state(content)
-    assert state["budget"]["soft_end_at"] == 11
-    assert state["budget"]["hard_end_at"] == 17
+    assert state["budget"]["soft_end_at"] == 18
+    assert state["budget"]["hard_end_at"] == 22
 
 
 def test_class_talk_blocks_class_choice(engine):

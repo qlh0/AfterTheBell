@@ -24,6 +24,9 @@ MAX_TURNS = {
     "shared_memory": 2,
     "unfinished_conversation": 3,
     "school_gate_finale": 3,
+    "library_study": 2,
+    "corridor_chat": 2,
+    "shop_trip": 2,
 }
 
 # 各事件激活时的初始证据
@@ -131,6 +134,28 @@ def update_evidence(
         ev["apology"] = ev.get("apology") or "apology" in actions
         ev["pressure"] = ev.get("pressure") or "control_autonomy" in actions
 
+    elif sid == "library_study":
+        ev["studied"] = ev.get("studied") or any(
+            w in text for w in ("学习", "题", "作业", "看书", "复习", "考试"))
+        ev["engaged"] = ev.get("engaged") or bool(
+            topics & {"care", "distance", "class_change", "romance"}
+            or actions & {"care", "support_autonomy", "discuss_class_future"})
+        ev["left"] = ev.get("left") or "leave" in topics
+
+    elif sid == "corridor_chat":
+        ev["chatted"] = ev.get("chatted") or bool(
+            topics & {"distance", "misunderstanding", "class_change", "romance", "care"}
+            or len(text) >= 10)
+        ev["awkward"] = ev.get("awkward") or bool(
+            not topics or "smalltalk" in topics)
+        ev["interrupted"] = ev.get("interrupted") or "leave" in topics
+
+    elif sid == "shop_trip":
+        ev["bought"] = ev.get("bought") or any(
+            w in text for w in ("买", "零食", "吃", "喝", "饮料"))
+        ev["met_classmate"] = ev.get("met_classmate") or "chenyu" in topics
+        ev["left"] = ev.get("left") or "leave" in topics
+
     elif sid == "school_gate_finale":
         if "express_romance" in actions:
             ev["player_stance"] = "romance"
@@ -158,6 +183,10 @@ def evaluate(
     sid = storylet.id
     turns = _turns(state)
     rel = state["relationship"]
+
+    # 插曲场景：进入当轮只铺情境，至少留一轮给玩家回应
+    if sid in ("library_study", "corridor_chat", "shop_trip") and turns < 2:
+        return Progress(None, "先看看她的反应")
 
     if sid == "old_note":
         if ev.get("cold"):
@@ -255,13 +284,48 @@ def evaluate(
             return Progress("finale_ready", "该说的已经说得差不多了")
         return Progress(None, "还差最后一句")
 
+    if sid == "library_study":
+        if ev.get("left"):
+            return Progress("left_early", "还没坐多久，玩家就想走了")
+        if ev.get("studied") and ev.get("engaged"):
+            return Progress("studied_together", "两个人一起学习，也聊到了她的事")
+        if ev.get("studied") or ev.get("engaged"):
+            return Progress("studied_quietly", "一起待了一会儿，但没有说太多")
+        if turns >= 2:
+            return Progress("studied_quietly", "图书馆里只剩下翻书声")
+        return Progress(None, "看玩家能不能安静地陪她一会儿")
+
+    if sid == "corridor_chat":
+        if ev.get("interrupted"):
+            return Progress("interrupted", "话还没说完，玩家就表示要走")
+        if ev.get("chatted"):
+            return Progress("chatted", "走廊里的这几句话，比在教室里更靠近她")
+        if ev.get("awkward") and turns >= 1:
+            return Progress("awkward", "两个人都没找到合适的话题")
+        if turns >= 2:
+            return Progress("awkward", "走廊里安静得有点尴尬")
+        return Progress(None, "等她/玩家开口")
+
+    if sid == "shop_trip":
+        if ev.get("met_classmate"):
+            return Progress("ran_into_classmate", "在小卖部碰见了同学，气氛被打断")
+        if ev.get("bought"):
+            return Progress("bought_together", "一起挑了东西，像是普通又难得的一次放学")
+        if ev.get("left"):
+            return Progress("went_alone", "玩家先走了，她一个人留在货架前")
+        if turns >= 2:
+            return Progress("went_alone", "最后各买各的，没怎么说话")
+        return Progress(None, "看她想买什么")
+
     # 未登记的事件：不自动完成
     return Progress(None, "未登记的事件类型，等待更多证据")
 
 
 def should_abandon(state: dict[str, Any], storylet: Storylet) -> tuple[bool, str]:
     """事件是否应当放弃（无结果、不写事实）。"""
-    if state.get("scene") not in storylet.allowed_scenes:
+    in_allowed = state.get("scene") in storylet.allowed_scenes
+    in_entered = storylet.enter_scene is not None and state.get("scene") == storylet.enter_scene
+    if not (in_allowed or in_entered):
         return True, "场景已经变化"
     if _turns(state) >= MAX_TURNS.get(storylet.id, 3):
         return True, "超过最大互动轮数仍未产生结果"
@@ -280,6 +344,9 @@ def allowed_outcomes(
     rel = state["relationship"]
     turns = _turns(state)
     sid = storylet.id
+
+    if sid in ("library_study", "corridor_chat", "shop_trip") and turns < 2:
+        return set()
 
     if sid == "late_explanation":
         if ev.get("pressure"):
@@ -365,6 +432,35 @@ def allowed_outcomes(
     if sid == "school_gate_finale":
         if ev.get("player_stance") or (ev.get("relationship_talk") and turns >= 1) or turns >= 2:
             return {"finale_ready"}
+        return set()
+
+    if sid == "library_study":
+        if ev.get("left"):
+            return {"left_early"}
+        if ev.get("studied") and ev.get("engaged"):
+            return {"studied_together"}
+        if ev.get("studied") or ev.get("engaged"):
+            return {"studied_quietly"}
+        if turns >= 2:
+            return {"studied_quietly"}
+        return set()
+
+    if sid == "corridor_chat":
+        if ev.get("interrupted"):
+            return {"interrupted"}
+        if ev.get("chatted"):
+            return {"chatted"}
+        if turns >= 2 or ev.get("awkward"):
+            return {"awkward"}
+        return set()
+
+    if sid == "shop_trip":
+        if ev.get("met_classmate"):
+            return {"ran_into_classmate"}
+        if ev.get("bought"):
+            return {"bought_together"}
+        if ev.get("left") or turns >= 2:
+            return {"went_alone"}
         return set()
 
     return set()

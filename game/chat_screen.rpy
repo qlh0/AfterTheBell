@@ -102,6 +102,8 @@ screen chat_ui():
                         if store.current_event_title:
                             text "- [current_event_title]" size 14 color "#93a1b8" yalign 0.5
                         null width 1
+                        text store.day_label size 12 color "#8fa0b8" yalign 0.6
+                        text "/" size 12 color "#5f6f86" yalign 0.6
                         text ("序章" if store.turn_index == 0 else "第%d回合" % store.turn_index):
                             size 12
                             color "#6f7d94"

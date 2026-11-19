@@ -28,6 +28,8 @@ def finale_eligible(state: dict[str, Any]) -> bool:
         return False
     if state["scene"] != "school_gate":
         return False
+    if int(state.get("day", 1)) < 2:
+        return False
     budget = state["budget"]
     p = gs.progress(state)
     if p >= int(budget["soft_end_at"]) or p >= int(budget["hard_end_at"]):
@@ -39,8 +41,8 @@ def finale_eligible(state: dict[str, Any]) -> bool:
         and facts["class_change_discussed"]
         and facts["player_expressed_romance"]
     )
-    # 给关系留出至少 13 个回合的铺垫，再进入校门口收束
-    return ready and p >= 8 and state.get("turn_index", 0) >= 13
+    # 给关系留出至少 16 个回合的铺垫，再进入校门口收束
+    return ready and p >= 8 and state.get("turn_index", 0) >= 16
 
 
 def maybe_make_eligible(state: dict[str, Any]) -> bool:

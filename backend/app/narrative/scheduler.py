@@ -60,6 +60,11 @@ def _activate(state: dict[str, Any], storylet: Storylet, how: str) -> Activation
     state["scheduled_at_version"] = None
     _mark_used(state, storylet.id)
 
+    if storylet.enter_scene:
+        # 插曲事件：进入图书馆/走廊/小卖部，结束后回到 return_scene
+        state["return_scene"] = storylet.return_scene or state["scene"]
+        state["scene"] = storylet.enter_scene
+
     variant = _choose_variant(state, storylet)
     cue = (variant or {}).get("cue") or storylet.opening_cue
     exposition = tuple((variant or {}).get("exposition") or storylet.exposition)
@@ -112,6 +117,38 @@ def try_activate(state: dict[str, Any], library: StoryletLibrary) -> Activation 
         return _activate(state, finale, "finale")
 
     return None
+
+
+def trigger_by_text(
+    state: dict[str, Any], library: StoryletLibrary, text: str
+) -> Activation | None:
+    """玩家这句话里出现「去图书馆/走廊/小卖部」等关键词时，直接进入插曲。"""
+    if state.get("active_storylet") or state.get("ending_phase") == "committed":
+        return None
+    lowered = text or ""
+    for storylet in library.manual_eligible(state):
+        if not storylet.trigger_keywords:
+            continue
+        if any(keyword in lowered for keyword in storylet.trigger_keywords):
+            return _activate(state, storylet, "keyword")
+    return None
+
+
+def force_finale(state: dict[str, Any], library: StoryletLibrary) -> Activation | None:
+    """到硬上限前强制进入校门口收束，保证结局前还有一段有效对话。"""
+    if state.get("ending_phase") == "committed":
+        return None
+    finale = library.get("school_gate_finale")
+    if finale is None:
+        return None
+    state["day"] = 2
+    state["scene"] = "school_gate"
+    if state.get("active_storylet") not in (None, finale.id):
+        clear_active(state)
+    if state.get("active_storylet") == finale.id:
+        return None
+    endings_rules.prepare(state)
+    return _activate(state, finale, "forced")
 
 
 def plan_next(

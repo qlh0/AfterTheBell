@@ -77,7 +77,7 @@ def test_record_api(client, tmp_path, monkeypatch):
     assert early.status_code == 409
     assert early.json()["error"] == "game_not_ended"
 
-    for i, text in enumerate(list(ROUTE_COMMUNICATE) + ["嗯。"] * 8):
+    for i, text in enumerate(list(ROUTE_COMMUNICATE) + ["嗯。"] * 12):
         resp = client.post(f"/game/{game_id}/interact",
                            json={"text": text, "request_id": f"req_rec_{i:06d}"})
         assert resp.status_code == 200

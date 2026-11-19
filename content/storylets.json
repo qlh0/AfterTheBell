@@ -218,6 +218,84 @@
       "scene_lock": null
     },
     {
+      "id": "library_study",
+      "title": "图书馆",
+      "kind": "activity",
+      "narrative_goal": "repair_or_deepen_trust",
+      "participants": ["player", "xuzhi"],
+      "allowed_scenes": ["classroom"],
+      "preconditions": {
+        "all": [
+          {"eq": ["ending_phase", "none"]},
+          {"falsy": ["active_storylet"]}
+        ]
+      },
+      "manual_only": true,
+      "trigger_keywords": ["图书馆", "自习", "一起学习"],
+      "enter_scene": "library",
+      "return_scene": "school_gate",
+      "enter_narration": "你们把书包拎到图书馆，在靠窗的位置坐下。",
+      "opening_cue": "图书馆里很安静，她把练习册摊开，笔尖却停在半空。",
+      "exposition": ["放学后的图书馆人不多，窗外是渐渐暗下来的操场。"],
+      "narrative_hint": "这是一段安静相处的时间；可以学习，也可以聊她最近的心事。不要强行告白。",
+      "possible_outcomes": ["studied_together", "studied_quietly", "left_early"],
+      "once": true,
+      "priority": 46,
+      "scene_lock": null
+    },
+    {
+      "id": "corridor_chat",
+      "title": "走廊",
+      "kind": "activity",
+      "narrative_goal": "repair_or_deepen_trust",
+      "participants": ["player", "xuzhi"],
+      "allowed_scenes": ["classroom"],
+      "preconditions": {
+        "all": [
+          {"eq": ["ending_phase", "none"]},
+          {"falsy": ["active_storylet"]}
+        ]
+      },
+      "manual_only": true,
+      "trigger_keywords": ["走廊", "窗边", "聊两句", "站一会儿"],
+      "enter_scene": "corridor",
+      "return_scene": "school_gate",
+      "enter_narration": "你们走到走廊尽头，窗外的天色正在暗下来。",
+      "opening_cue": "走廊里人来人往，她靠在窗边，像是在等你说点什么。",
+      "exposition": ["走廊比教室冷一点，远处是操场和下班的人流。"],
+      "narrative_hint": "走廊是从教室到校门口的过渡；适合说一些在教室里不方便说的话。",
+      "possible_outcomes": ["chatted", "awkward", "interrupted"],
+      "once": true,
+      "priority": 45,
+      "scene_lock": null
+    },
+    {
+      "id": "shop_trip",
+      "title": "小卖部",
+      "kind": "activity",
+      "narrative_goal": "repair_or_deepen_trust",
+      "participants": ["player", "xuzhi"],
+      "allowed_scenes": ["school_gate"],
+      "preconditions": {
+        "all": [
+          {"eq": ["ending_phase", "none"]},
+          {"falsy": ["active_storylet"]}
+        ]
+      },
+      "manual_only": true,
+      "trigger_keywords": ["小卖部", "买东西", "零食", "饮料"],
+      "enter_scene": "shop",
+      "return_scene": "school_gate",
+      "enter_narration": "你们拐进校门口的小卖部，暖黄的灯亮着。",
+      "opening_cue": "小卖部里只剩店员在理货，她在货架前停下来。",
+      "exposition": ["小卖部的灯比外面亮，玻璃柜里摆着几排饮料。"],
+      "narrative_hint": "一次普通的放学买东西；不用每句话都沉重，日常感本身就是关系进展。",
+      "possible_outcomes": ["bought_together", "ran_into_classmate", "went_alone"],
+      "once": true,
+      "priority": 44,
+      "scene_lock": null
+    },
+    {
       "id": "school_gate_finale",
       "title": "校门口",
       "kind": "finale",

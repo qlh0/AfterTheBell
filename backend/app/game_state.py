@@ -13,7 +13,17 @@ from typing import Any
 
 from .config import LIMITS
 
-SCENES = ("classroom", "school_gate")
+SCENES = ("classroom", "school_gate", "corridor", "library", "shop")
+OPTIONAL_SCENES = ("corridor", "library", "shop")
+
+# 主场景推进：第一天教室 → 第一天校门口 → 第二天教室 → 第二天校门口。
+# 走廊 / 图书馆 / 小卖部是插曲场景，由事件进入，结束后回到 return_scene。
+SCENE_FLOW = {
+    (1, "classroom"): (1, "school_gate"),
+    (1, "school_gate"): (2, "classroom"),
+    (2, "classroom"): (2, "school_gate"),
+}
+DAY_LABELS = {1: "第一天", 2: "第二天"}
 EMOTIONS = ("guarded", "normal", "relieved", "happy", "hurt", "sad", "annoyed", "soft")
 MUTUAL_INTENTS = ("unknown", "romance", "friendship", "declined")
 PHASES = ("none", "eligible", "prepared", "committed")
@@ -45,6 +55,9 @@ FACT_FIELDS = (
     "walk_home_done",
     "finale_resolved",
     "player_mentioned_memory",
+    "library_visited",
+    "corridor_chatted",
+    "shop_visited",
 )
 
 EMOTION_TO_SPRITE = {
@@ -65,6 +78,8 @@ def default_state(game_id: str, goals: list[str], budget: int = 12) -> dict[str,
         "branch_id": "main",
         "state_version": 0,
         "scene": "classroom",
+        "day": 1,
+        "return_scene": None,
         "time_slot": "after_school",
         "turn_index": 0,
         "meaningful_turns": 0,
@@ -89,6 +104,9 @@ def default_state(game_id: str, goals: list[str], budget: int = 12) -> dict[str,
             "walk_home_done": False,
             "finale_resolved": False,
             "player_mentioned_memory": False,
+            "library_visited": False,
+            "corridor_chatted": False,
+            "shop_visited": False,
         },
         "npc": {
             "id": "xuzhi",
@@ -114,7 +132,7 @@ def default_state(game_id: str, goals: list[str], budget: int = 12) -> dict[str,
         "ending_id": None,
         "budget": {
             "max_meaningful_turns": budget,
-            "soft_end_at": max(6, budget - 3),
+            "soft_end_at": max(6, budget - 1),
             "hard_end_at": budget + 3,
         },
     }
@@ -227,6 +245,8 @@ def validate_state(state: dict[str, Any]) -> None:
             raise ValueError(f"state 缺少字段: {key}")
     if state["scene"] not in SCENES:
         raise ValueError(f"非法 scene: {state['scene']}")
+    if int(state.get("day", 1)) not in DAY_LABELS:
+        raise ValueError(f"非法 day: {state.get('day')!r}")
     if state["npc"].get("mutual_intent") not in MUTUAL_INTENTS:
         raise ValueError(f"非法 mutual_intent: {state['npc'].get('mutual_intent')}")
     if state["ending_phase"] not in PHASES:

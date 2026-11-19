@@ -73,6 +73,24 @@ def suggestions(
                 _item("apology", "道歉", "刚才是我不好，我不该那样说。"),
                 _item("listen", "先听她说", "你先说，我听着。"),
             ]
+        elif sid == "library_study":
+            items += [
+                _item("study", "一起学习", "这道题你会吗？我们一起看看。"),
+                _item("ask", "问她最近", "你最近是不是有什么心事？在这里说也没关系。"),
+                _item("leave", "先走", "要不今天先到这里？"),
+            ]
+        elif sid == "corridor_chat":
+            items += [
+                _item("talk", "说点什么", "其实我刚才在教室里就想跟你说。"),
+                _item("ask", "问她最近", "你最近是不是在躲我？"),
+                _item("leave", "先走", "算了，先下楼吧。"),
+            ]
+        elif sid == "shop_trip":
+            items += [
+                _item("buy", "帮她挑", "你想喝什么？我请你。"),
+                _item("share", "买两瓶", "买两瓶一样的吧，路上喝。"),
+                _item("leave", "先走", "我还有点事，先走了。"),
+            ]
         elif sid == "school_gate_finale":
             items += [
                 _item("confess", "说出心意", "我喜欢你，不管下学期分不分班。"),
@@ -80,8 +98,18 @@ def suggestions(
                 _item("wait", "给她时间", "你不用现在回答我，我等你。"),
             ]
 
-    # 没有事件时：按「还没推进的目标」给建议
+    # 没有事件时：先给当前场景可去的日常活动，再给「还没推进的目标」
     if not items:
+        used = set(state.get("used_storylets") or [])
+        scene = state.get("scene")
+        if scene == "classroom":
+            if "library_study" not in used:
+                items.append(_item("library", "去图书馆", "放学后要不要一起去图书馆学习？"))
+            if "corridor_chat" not in used:
+                items.append(_item("corridor", "走廊聊两句", "陪我去走廊站一会儿吧。"))
+        elif scene == "school_gate" and "shop_trip" not in used:
+            items.append(_item("shop", "去小卖部", "一起去小卖部买点东西吧。"))
+
         if not facts["player_asked_distance"]:
             items.append(_item("ask_distance", "问她怎么了", "你最近是不是在躲我？"))
         if facts["misunderstanding_discussed"] and not facts["misunderstanding_resolved"]:

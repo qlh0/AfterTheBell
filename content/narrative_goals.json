@@ -72,10 +72,10 @@
     }
   },
   "pacing": {
-    "target_meaningful_turns_min": 10,
-    "target_meaningful_turns_max": 16,
-    "default_meaningful_turn_budget": 14,
-    "soft_end_at": 10,
-    "hard_end_at": 16
+    "target_meaningful_turns_min": 18,
+    "target_meaningful_turns_max": 22,
+    "default_meaningful_turn_budget": 19,
+    "soft_end_at": 16,
+    "hard_end_at": 22
   }
 }

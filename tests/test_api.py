@@ -22,7 +22,7 @@ def interact(client, game_id: str, text: str, request_id: str | None = None, ver
 def test_health(client):
     data = client.get("/health").json()
     assert data["ok"] is True
-    assert data["storylets"] == 9
+    assert data["storylets"] == 12
     assert data["llm_mode"] == "mock"
 
 
@@ -104,7 +104,7 @@ def test_ending_committed_rejects_more_turns(client):
 
     game_id = start(client)["game_id"]
     last = None
-    for text in list(ROUTE_CONTROL) + ["嗯。"] * 10:
+    for text in list(ROUTE_CONTROL) + ["嗯。"] * 12:
         resp = interact(client, game_id, text)
         if resp.status_code != 200:
             break

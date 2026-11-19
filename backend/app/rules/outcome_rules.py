@@ -61,4 +61,25 @@ def default_outcome(storylet: Storylet, analysis: Analysis) -> str:
             return "topic_dropped"
         return "suspicion_raised"
 
+    if storylet.id == "library_study":
+        if "leave" in analysis.topics:
+            return "left_early"
+        if any(w in analysis.normalized for w in ("学习", "题", "作业", "看书")):
+            return "studied_together"
+        return "studied_quietly"
+
+    if storylet.id == "corridor_chat":
+        if "leave" in analysis.topics:
+            return "interrupted"
+        if analysis.topics & {"distance", "misunderstanding", "class_change", "romance", "care"}:
+            return "chatted"
+        return "awkward"
+
+    if storylet.id == "shop_trip":
+        if "chenyu" in analysis.topics:
+            return "ran_into_classmate"
+        if any(w in analysis.normalized for w in ("买", "喝", "吃", "零食")):
+            return "bought_together"
+        return "went_alone"
+
     return first

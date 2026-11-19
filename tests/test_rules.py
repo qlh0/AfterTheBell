@@ -54,12 +54,13 @@ def test_invalid_predicate_is_rejected():
 
 
 def test_storylet_content_is_valid(content):
-    # 内容加载时已经过 validate；7 个原有事件 + 2 个新增事件
-    assert len(content.storylets) == 9
+    # 内容加载时已经过 validate；原有事件 + 新增事件
+    assert len(content.storylets) == 12
     ids = {s.id for s in content.storylets.all()}
     assert {"old_note", "direct_question", "chenyu_hint", "late_explanation",
             "class_choice", "walk_home", "school_gate_finale",
-            "unfinished_conversation", "shared_memory"} <= ids
+            "unfinished_conversation", "shared_memory",
+            "library_study", "corridor_chat", "shop_trip"} <= ids
     assert {"notice_distance", "clarify_misunderstanding", "discuss_class_change",
             "define_relationship", "repair_or_deepen_trust"} <= set(content.goals)
 
@@ -152,7 +153,9 @@ def test_no_ending_gate_passes_without_finale(content):
 
 def test_finale_only_at_school_gate(content):
     state = _base_state(content)
-    state["meaningful_turns"] = 12
+    state["meaningful_turns"] = 18
     assert not endings.finale_eligible(state)
     state["scene"] = "school_gate"
+    assert not endings.finale_eligible(state), "第一天校门口还不能收束"
+    state["day"] = 2
     assert endings.finale_eligible(state)

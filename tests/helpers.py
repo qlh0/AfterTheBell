@@ -16,7 +16,7 @@ def send(engine: Engine, game_id: str, text: str, expected_version: int | None =
     return engine.interact(game_id, text, new_request_id(), expected_version)
 
 
-def play(engine: Engine, turns: list[str], max_extra: int = 6) -> tuple[str, dict[str, Any], list[dict[str, Any]]]:
+def play(engine: Engine, turns: list[str], max_extra: int = 12) -> tuple[str, dict[str, Any], list[dict[str, Any]]]:
     """按脚本推进，直到结局出现或脚本用完（再用几轮沉默兜底收束）。"""
     start = engine.start()
     game_id = start["game_id"]

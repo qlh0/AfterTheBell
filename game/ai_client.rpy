@@ -38,6 +38,8 @@ init -10 python:
 
     def atb_apply_presentation(presentation):
         store.scene_id = presentation.get("scene_id", "classroom")
+        store.day = presentation.get("day", 1)
+        store.day_label = presentation.get("day_label", "第一天")
         store.sprite_id = presentation.get("sprite_id", "xuzhi_guarded")
         store.current_event_title = presentation.get("event_title")
 

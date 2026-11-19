@@ -7,6 +7,11 @@
 
 image bg classroom = "images/bg_classroom.png"
 image bg school_gate = "images/bg_school_gate.png"
+image bg corridor = "images/bg_corridor.png"
+image bg library = "images/bg_library.png"
+image bg shop = "images/bg_shop.png"
+image bg classroom_day2 = "images/bg_classroom_day2.png"
+image bg school_gate_day2 = "images/bg_school_gate_day2.png"
 image xuzhi normal = "images/xuzhi_normal.png"
 image xuzhi guarded = "images/xuzhi_guarded.png"
 image xuzhi smile = "images/xuzhi_smile.png"
@@ -21,6 +26,8 @@ default game_id = None
 default state_version = 0
 default turn_index = 0
 default scene_id = "classroom"
+default day = 1
+default day_label = "第一天"
 default sprite_id = "xuzhi_guarded"
 default displayed_scene = None
 default displayed_sprite = None
@@ -50,6 +57,7 @@ label selfcheck:
     $ selfcheck_mode = True
     $ atb_selfcheck_reset()
     $ atb_selfcheck_note("boot=%s" % atb_boot())
+    $ atb_selfcheck_note("bg_images=%s" % ",".join(sorted(i for i in renpy.list_images() if i.startswith("bg "))))
     $ _err = atb_start()
     $ atb_selfcheck_note("start_err=%r" % (_err,))
     if _err is None:
@@ -81,6 +89,16 @@ label selfcheck:
     $ _res_log = renpy.call_screen("chat_ui")
     $ atb_selfcheck_note("log_screen_ok res=%r" % (_res_log,))
     $ log_expanded = False
+    python:
+        for _sid in ("corridor", "library", "shop", "classroom_day2", "school_gate_day2"):
+            scene_id = _sid
+            day = 2 if _sid.endswith("_day2") else 1
+            day_label = "第二天" if day == 2 else "第一天"
+            displayed_scene = None
+            atb_render_scene(transition=False)
+            selfcheck_shot_name = "scene_" + _sid
+            renpy.call_screen("chat_ui")
+    $ atb_selfcheck_note("scene_tour_ok")
     $ _demo_ending = {"id": "romance", "title": "测试结局", "subtitle": "SELF CHECK",
                       "epilogue": ["第一行测试文本。", "第二行测试文本。"], "closing_line": "——测试用结尾。"}
     $ atb_selfcheck_note("ending_begin")
