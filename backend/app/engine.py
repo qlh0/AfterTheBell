@@ -350,6 +350,40 @@ class Engine:
                 "payload": {"day": state.get("day", 1), "to": state["scene"]},
             })
 
+        # 7.5 第一天校门口：玩家说“明天见”，或到第 15 轮，她主动收束到第二天
+        if (
+            state["ending_phase"] != "committed"
+            and not state.get("active_storylet")
+            and int(state.get("day", 1)) == 1
+            and state["scene"] == "school_gate"
+        ):
+            goodbye = any(
+                word in analysis.normalized
+                for word in ("明天见", "明天见啦", "明天见吧", "先走了", "我先走",
+                             "路上小心", "再见", "拜拜", "回家了", "回家")
+            )
+            if goodbye or state["turn_index"] >= 15:
+                transition_before_scene = state["scene"]
+                moved, scene_text = self._advance_main_scene(state)
+                if moved:
+                    narration.append(scene_text)
+                    changes.append({
+                        "path": "scene",
+                        "before": f"day1:{transition_before_scene}",
+                        "after": f"day{state.get('day', 1)}:{state['scene']}",
+                        "reason": "goodbye" if goodbye else "proactive_next_day",
+                    })
+                    events.append({
+                        "event_id": "scene_transition",
+                        "kind": "scene",
+                        "status": "committed",
+                        "payload": {
+                            "day": state.get("day", 1),
+                            "to": state["scene"],
+                            "reason": "goodbye" if goodbye else "proactive_next_day",
+                        },
+                    })
+
         # 8. 目标与结局资格
         changes.extend(goal_rules.record_goal_progress(state, self.content))
         if ending_rules.maybe_make_eligible(state):
@@ -782,6 +816,10 @@ class Engine:
         state["scene"] = new_scene
         state["return_scene"] = None
         if new_day != day:
+            if scene == "school_gate":
+                return True, "她把书包带整理好，朝你摆了摆手：「明天放学后见。」\n第二天放学后，教室里只剩下你们两个。"
+            if scene == "shop":
+                return True, "你们从小卖部出来。第二天放学后，教室里只剩下你们两个。"
             return True, "第二天放学后，教室里只剩下你们两个。窗外的光比昨天暗得早一些。"
         if day == 1 and scene == "classroom" and new_scene == "school_gate":
             return True, "放学铃响过，你们收好书包，一前一后下了楼。校门口的路灯刚亮。"
@@ -806,13 +844,9 @@ class Engine:
             "leave" in analysis.topics or p >= 5 or state["turn_index"] >= 5
         ):
             return self._advance_main_scene(state)
-        if (day, scene) == (1, "school_gate") and (
-            p >= 10 or state["turn_index"] >= 10
-        ):
+        if (day, scene) == (1, "school_gate") and state["turn_index"] >= 15:
             return self._advance_main_scene(state)
-        if (day, scene) == (2, "classroom") and (
-            p >= 15 or state["turn_index"] >= 15
-        ):
+        if (day, scene) == (2, "classroom") and state["turn_index"] >= 18:
             return self._advance_main_scene(state)
         return False, ""
 

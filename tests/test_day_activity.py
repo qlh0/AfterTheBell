@@ -144,6 +144,48 @@ def test_class_change_evasion_is_detected():
     assert _has_class_plan("我填了理重点班，我想了很久。")
 
 
+def test_goodbye_at_gate_moves_to_next_day(engine):
+    start = engine.start()
+    gid = start["game_id"]
+    engine.advance(gid, "req_bye_000", "continue")
+    state = _state(engine, gid)
+    # 清掉排期，专门验证「明天见」本身就能收束
+    state["active_storylet"] = None
+    state["scheduled_storylet"] = None
+    state["state_version"] += 1
+    engine.db.save_state(state)
+
+    data = engine.interact(gid, "那明天见啦。", "req_bye_001")
+    st = _state(engine, gid)
+    assert (st["day"], st["scene"]) == (2, "classroom")
+    assert any("明天放学后见" in line for line in data["narration"])
+
+
+def test_proactive_next_day_at_turn_15(engine):
+    start = engine.start()
+    gid = start["game_id"]
+    state = _state(engine, gid)
+    state["day"] = 1
+    state["scene"] = "school_gate"
+    state["turn_index"] = 14
+    state["active_storylet"] = None
+    state["scheduled_storylet"] = None
+    state["state_version"] += 1
+    engine.db.save_state(state)
+
+    data = engine.interact(gid, "嗯。", "req_proactive_001")
+    st = _state(engine, gid)
+    assert (st["day"], st["scene"]) == (2, "classroom")
+    assert any("明天放学后见" in line for line in data["narration"])
+
+
+def test_stalling_dialogue_is_detected():
+    from app.agents.llm_character import _is_stalling
+
+    assert _is_stalling("没什么……刚想说的话，到嘴边又忘了。")
+    assert not _is_stalling("我填了理重点班，我想了很久。")
+
+
 def test_class_talk_requires_concrete_plan(engine):
     from app.rules import class_talk
     from app.rules.meaningful_turn import analyze

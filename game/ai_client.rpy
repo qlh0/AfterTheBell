@@ -36,16 +36,22 @@ init -10 python:
         store.backend_error = ""
         return True
 
-    def atb_apply_presentation(presentation):
-        new_day = int(presentation.get("day", 1) or 1)
-        if new_day > int(store.day or 1):
-            # 不在网络回调里阻塞；由 chat_loop 统一播放黑屏转场
-            store.pending_day_break = presentation.get("day_label", "第二天")
+    def atb_commit_presentation(presentation):
         store.scene_id = presentation.get("scene_id", "classroom")
-        store.day = new_day
+        store.day = int(presentation.get("day", 1) or 1)
         store.day_label = presentation.get("day_label", "第一天")
         store.sprite_id = presentation.get("sprite_id", "xuzhi_guarded")
         store.current_event_title = presentation.get("event_title")
+
+    def atb_apply_presentation(presentation, initial=False):
+        new_day = int(presentation.get("day", 1) or 1)
+        if new_day > int(store.day or 1) and not initial:
+            # 先让玩家在当前场景读完这一轮（例如她的“明天见”），
+            # 下一次操作前再黑屏转场，避免跨天回复出现在错误背景上。
+            store.pending_day_presentation = dict(presentation)
+            store.pending_day_break = presentation.get("day_label", "第二天")
+            return
+        atb_commit_presentation(presentation)
 
     def atb_render_scene(transition=True):
         """按后端给的白名单 scene/sprite 切换画面；不执行任何模型输出的代码。"""
@@ -108,7 +114,7 @@ init -10 python:
             atb_append("narrator", line)
         atb_append("xuzhi", data.get("dialogue", ""))
         atb_set_turn(data.get("narration", []), data.get("dialogue", ""))
-        atb_apply_presentation(data["presentation"])
+        atb_apply_presentation(data["presentation"], initial=True)
         store.suggestions = data.get("suggestions", []) or []
         return None
 

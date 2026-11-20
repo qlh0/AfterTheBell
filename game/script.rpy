@@ -34,6 +34,7 @@ default sprite_id = "xuzhi_guarded"
 default displayed_scene = None
 default displayed_sprite = None
 default pending_day_break = None
+default pending_day_presentation = None
 default current_event_title = None
 default chat_log = []
 default current_narration = []
@@ -103,6 +104,10 @@ label selfcheck:
             renpy.call_screen("chat_ui")
     $ atb_selfcheck_note("scene_tour_ok")
     $ atb_apply_presentation({"day": 2, "day_label": "第二天", "scene_id": "classroom", "sprite_id": "xuzhi_normal"})
+    $ atb_selfcheck_note("day_deferred day=%s scene=%s pending=%r" % (day, scene_id, pending_day_break))
+    $ atb_commit_presentation(pending_day_presentation)
+    $ pending_day_presentation = None
+    $ atb_selfcheck_note("day_committed day=%s scene=%s" % (day, scene_id))
     $ pending_day_break = None
     $ atb_selfcheck_note("day_transition_apply_ok")
     $ _res_day = renpy.call_screen("day_break", day_label="第二天")
@@ -125,6 +130,7 @@ label start:
     $ log_expanded = False
     $ ending_data = None
     $ pending_day_break = None
+    $ pending_day_presentation = None
     $ displayed_scene = None
     $ displayed_sprite = None
     $ game_id = None
@@ -151,10 +157,6 @@ label boot_backend:
 
 
 label chat_loop:
-    if pending_day_break:
-        $ _day_break_label = pending_day_break
-        $ pending_day_break = None
-        call screen day_break(_day_break_label)
     $ atb_render_scene()
     $ _res = renpy.call_screen("chat_ui")
 
@@ -167,6 +169,14 @@ label chat_loop:
             return
         jump chat_loop
 
+    # 上一轮已经把跨天状态交回来；先让玩家看完，再转场。
+    if pending_day_break:
+        $ _day_break_label = pending_day_break
+        $ pending_day_break = None
+        call screen day_break(_day_break_label)
+        $ atb_commit_presentation(pending_day_presentation)
+        $ pending_day_presentation = None
+
     if _res[0] == "advance":
         $ _err = atb_advance()
     else:
@@ -175,11 +185,6 @@ label chat_loop:
 
     if _err is not None:
         $ atb_log_error(_err)
-
-    if pending_day_break:
-        $ _day_break_label = pending_day_break
-        $ pending_day_break = None
-        call screen day_break(_day_break_label)
 
     if ending_data is not None:
         jump ending_scene

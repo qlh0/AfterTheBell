@@ -54,6 +54,10 @@ CLASS_QUESTION_WORDS = (
     "填", "报", "去哪", "哪里", "打算", "准备", "怎么想", "计划", "方向", "选",
 )
 
+STALL_WORDS = (
+    "话到嘴边", "到嘴边又", "又忘了", "想不起来", "欲言又止",
+)
+
 
 class LLMResponseError(Exception):
     pass
@@ -78,6 +82,10 @@ def _needs_class_plan(analysis: Analysis) -> bool:
 
 def _has_class_plan(dialogue: str) -> bool:
     return any(word in dialogue for word in CLASS_PLAN_WORDS)
+
+
+def _is_stalling(dialogue: str) -> bool:
+    return any(word in dialogue for word in STALL_WORDS)
 
 
 _CONTENT: Content | None = None
@@ -220,6 +228,7 @@ def llm_reply(
     usage: dict[str, Any] = {}
     tone_retried = False
     class_retried = False
+    stall_retried = False
 
     for attempt in range(1 + max(0, config.LLM_MAX_RETRIES)):
         try:
@@ -295,6 +304,28 @@ def llm_reply(
                                 "物理方向、还在犹豫），并说明这是你自己的决定。保持你有点紧张的语气，只输出 JSON。"},
                 ]
                 continue
+
+        # 不要用「话到嘴边又忘了」拖节奏；有内容就说，没内容就收住
+        if _is_stalling(reply.dialogue):
+            if not stall_retried:
+                stall_retried = True
+                last_error = "stalling"
+                messages = messages + [
+                    {"role": "assistant", "content": str(raw)[:600]},
+                    {"role": "user",
+                     "content": "这句「话到嘴边又忘了 / 欲言又止」是在拖节奏。不要用忘记、"
+                                "想不起来或含糊的停顿来延长对话；如果她真想说，就直接说具体内容；"
+                                "如果不想说，就明确收住这个话题，让玩家能继续。只输出 JSON。"},
+                ]
+                continue
+            soft = mock_character.reply(state, analysis, storylet, expected_ending)
+            soft.source = "fallback:stalling"
+            soft.error = "stalling"
+            soft.latency_ms = int((time.monotonic() - started) * 1000)
+            soft.model = config.LLM_MODEL
+            soft.prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
+            soft.completion_tokens = int(usage.get("completion_tokens", 0) or 0)
+            return soft
             soft = mock_character.reply(state, analysis, storylet, expected_ending)
             soft.source = "fallback:class_evasive"
             soft.error = "class_evasive"
