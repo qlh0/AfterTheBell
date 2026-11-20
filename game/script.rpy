@@ -114,6 +114,10 @@ label selfcheck:
     $ atb_selfcheck_note("day_break_ok res=%r" % (_res_day,))
     $ _demo_ending = {"id": "romance", "title": "测试结局", "subtitle": "SELF CHECK",
                       "epilogue": ["第一行测试文本。", "第二行测试文本。"], "closing_line": "——测试用结尾。"}
+    python:
+        import json
+        with open(os.path.join(config.gamedir, "..", "content", "endings.json"), encoding="utf-8") as _f:
+            _demo_ending = json.load(_f)["endings"]["romance"]
     $ atb_selfcheck_note("ending_begin")
     $ _ending_res = renpy.call_screen("ending_view", _demo_ending)
     $ atb_selfcheck_note("ending_screen_ok res=%r" % (_ending_res,))

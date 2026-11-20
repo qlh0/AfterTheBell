@@ -182,17 +182,43 @@ screen chat_ui():
     key "K_RETURN" action If(not store.log_expanded and store.panel_mode == "dialogue" and store.input_text.strip() != "", Return(("send", store.input_text)), NullAction())
 
 
+transform day_break_line1:
+    alpha 0.0
+    linear 0.6 alpha 1.0
+    pause 1.6
+    linear 0.6 alpha 0.0
+
+
+transform day_break_line2:
+    alpha 0.0
+    pause 0.8
+    linear 1.2 alpha 1.0
+    pause 1.2
+    linear 0.6 alpha 0.0
+
+
+transform day_break_line3:
+    alpha 0.0
+    pause 4.2
+    linear 0.8 alpha 1.0
+
+
 screen day_break(day_label):
     zorder 300
     modal True
     add Solid("#000000")
     vbox:
         xalign 0.5
-        yalign 0.5
-        spacing 12
-        text day_label size 56 color "#f2f2f2" xalign 0.5
-        text "放学后" size 22 color "#a8a8a8" xalign 0.5
-    timer 1.4 action Return()
+        yalign 0.46
+        spacing 22
+        text "Day 01 - END" size 38 color "#f2f2f2" xalign 0.5 at day_break_line1
+        text "有些话，今天还没能说出口。\n不过，明天也还能见面。" size 23 color "#c8c8c8" xalign 0.5 text_align 0.5 at day_break_line2
+    text "DAY 02 — 放学后" size 42 color "#f2f2f2" xalign 0.5 yalign 0.5 at day_break_line3
+    if store.selfcheck_mode:
+        timer 1.0 action Function(atb_screenshot, "day_break_1")
+        timer 2.8 action Function(atb_screenshot, "day_break_2")
+        timer 4.7 action Function(atb_screenshot, "day_break_3")
+    timer 6.2 action Return()
 
 
 screen thinking_overlay():
@@ -233,7 +259,8 @@ screen ending_view(ending):
     zorder 100
 
     if store.selfcheck_mode:
-        timer 0.8 action Return(True)
+        timer 0.6 action Function(atb_screenshot, "ending")
+        timer 0.9 action Return(True)
 
     add Solid("#05070bcc")
 
@@ -241,19 +268,19 @@ screen ending_view(ending):
         background Solid("#0c1119f2")
         xalign 0.5
         yalign 0.5
-        xsize 780
-        padding (44, 36)
+        xsize 860
+        padding (42, 30)
 
         vbox:
-            spacing 16
-            text ending["title"] size 42 color "#f2c9a2" xalign 0.5 text_align 0.5
-            text ending["subtitle"] size 15 color "#93a1b8" xalign 0.5
-            null height 8
+            spacing 10
+            text ending["title"] size 38 color "#f2c9a2" xalign 0.5 text_align 0.5
+            text ending["subtitle"] size 14 color "#93a1b8" xalign 0.5
+            null height 4
             for line in ending["epilogue"]:
-                text line size 20 color "#e6ecf6" xalign 0.5 text_align 0.5
-            null height 10
-            text ending["closing_line"] size 16 color "#93a1b8" italic True xalign 0.5 text_align 0.5
+                text line size 18 color "#e6ecf6" xalign 0.5 text_align 0.5
             null height 6
-            text "本局对局记录已保存" size 13 color "#6f7d94" xalign 0.5
-            null height 12
+            text ending["closing_line"] size 14 color "#93a1b8" italic True xalign 0.5 text_align 0.5
+            null height 4
+            text "本局对局记录已保存" size 12 color "#6f7d94" xalign 0.5
+            null height 8
             textbutton "回到标题" action Return(True) xalign 0.5
