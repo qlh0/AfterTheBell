@@ -225,7 +225,7 @@ screen day_plan():
     modal True
     zorder 280
     add Solid("#05070be6")
-    default plan_text = ""
+    default plan_text = "明天想约她去图书馆，一起复习数学。" if store.selfcheck_mode else ""
 
     if store.selfcheck_mode:
         timer 0.2 action Function(atb_screenshot, "day_plan")
@@ -239,12 +239,13 @@ screen day_plan():
         padding (40, 32)
 
         vbox:
+            xalign 0.5
             spacing 12
             text "第二天" size 22 color "#8fa0b8" xalign 0.5
             text "放学后，你打算做什么？" size 30 color "#f2c9a2" xalign 0.5
             text "写一句，或者直接选一个方向。她不会自动知道你的计划。" size 15 color "#a8b4c8" xalign 0.5 text_align 0.5
             null height 4
-            input value ScreenVariableInputValue("plan_text") length 140 xalign 0.5
+            input value ScreenVariableInputValue("plan_text") length 140 xalign 0.5 xsize 620 text_align 0.5
             hbox:
                 xalign 0.5
                 spacing 10
@@ -273,7 +274,6 @@ screen thinking_overlay():
         hbox:
             spacing 6
             text "许栀正在回复" size 17 color "#f2c9a2"
-            text "···" size 17 color "#f2c9a2"
 
 
 screen backend_down(message):

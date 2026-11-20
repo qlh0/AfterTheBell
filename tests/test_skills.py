@@ -41,3 +41,11 @@ def test_prompt_loads_dialogue_scene_and_ending_crafts():
     assert finale is not None
     ending_prompt = prompts.system_prompt(content, finale)
     assert "结局写作规范" in ending_prompt
+
+
+def test_walked_together_narration_does_not_claim_class_not_discussed():
+    from app.rules.storylet_resolution import OUTCOMES
+
+    narration = OUTCOMES["walk_home"]["walked_together"]["narr"]
+    assert any("谁都没急着开口" in line for line in narration)
+    assert all("分班" not in line for line in narration)

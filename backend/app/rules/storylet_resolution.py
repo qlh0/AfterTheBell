@@ -127,7 +127,7 @@ OUTCOMES: dict[str, dict[str, dict[str, Any]]] = {
         "walked_together": {
             "rel": {"trust": 3, "affection": 3},
             "facts": ["walk_home_done"],
-            "narr": ["你们并肩走了一段，谁都没先提分班的事。", "路灯一盏一盏亮起来，她的步子比平时慢。"],
+            "narr": ["你们并肩走了一段，谁都没急着开口。", "路灯一盏一盏亮起来，她的步子比平时慢。"],
             "mem": ("episode", "两人一起走了一段放学路，气氛缓和。", 4, ["walk_home"]),
         },
         "walked_apart": {
