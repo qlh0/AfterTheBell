@@ -44,6 +44,7 @@ default current_narration = []
 default current_dialogue = ""
 default panel_mode = "dialogue"
 default input_text = ""
+default input_caret_end = False
 default suggestions = []
 default used_suggestions = []
 default log_expanded = False
@@ -79,6 +80,7 @@ label selfcheck:
         $ _sug_before = len(atb_visible_suggestions())
         $ atb_mark_suggestion_used(suggestions[0]["text"]) if suggestions else None
         $ atb_selfcheck_note("suggestions_filtered %d->%d" % (_sug_before, len(atb_visible_suggestions())))
+        $ atb_fill_suggestion("测试建议文本，光标应该在最后面。")
         $ atb_render_scene(transition=False)
         $ selfcheck_shot_name = "chat_dialogue"
         $ _res = renpy.call_screen("chat_ui")

@@ -102,6 +102,25 @@ init -10 python:
             if len(store.used_suggestions) > 100:
                 store.used_suggestions = store.used_suggestions[-100:]
 
+    def atb_fill_suggestion(text):
+        """填入建议后，下一帧把光标移到末尾；直接 SetVariable 会保留旧光标位置。"""
+        store.input_text = text or ""
+        store.input_caret_end = True
+        renpy.restart_interaction()
+
+    def atb_apply_input_caret():
+        if not store.input_caret_end:
+            return
+        store.input_caret_end = False
+        screen = renpy.get_screen("chat_ui")
+        widget = screen.widgets.get("chat_input") if screen is not None else None
+        if widget is None or not hasattr(widget, "caret_pos"):
+            return
+        widget.caret_pos = len(widget.content)
+        widget.old_caret_pos = widget.caret_pos
+        widget.update_text(widget.content, widget.editable)
+        renpy.restart_interaction()
+
     def atb_start():
         store.chat_log = []
         store.used_suggestions = []

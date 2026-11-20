@@ -45,6 +45,9 @@ screen chat_ui():
     modal True
     zorder 50
 
+    if store.input_caret_end:
+        timer 0.01 action Function(atb_apply_input_caret)
+
     if store.selfcheck_mode:
         timer 0.8 action [Function(atb_screenshot, store.selfcheck_shot_name), Return(("quit", None))]
 
@@ -134,7 +137,7 @@ screen chat_ui():
                                     textbutton sug["label"]:
                                         style "chip_button"
                                         action [Function(atb_mark_suggestion_used, sug["text"]),
-                                                SetVariable("input_text", sug["text"])]
+                                                Function(atb_fill_suggestion, sug["text"])]
 
                         hbox:
                             spacing 8
@@ -144,6 +147,7 @@ screen chat_ui():
                                 padding (12, 5)
                                 xsize 1040
                                 input:
+                                    id "chat_input"
                                     value VariableInputValue("input_text")
                                     length 200
                                     size 19
