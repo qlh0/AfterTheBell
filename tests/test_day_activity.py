@@ -159,6 +159,10 @@ def test_goodbye_at_gate_moves_to_next_day(engine):
     st = _state(engine, gid)
     assert (st["day"], st["scene"]) == (2, "classroom")
     assert any("明天放学后见" in line for line in data["narration"])
+    assert all("第二天放学后" not in line for line in data["narration"])
+
+    data2 = engine.interact(gid, "嗯，我记住了。", "req_bye_002")
+    assert any("第二天放学后" in line for line in data2["narration"])
 
 
 def test_proactive_next_day_at_turn_15(engine):

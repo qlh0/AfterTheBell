@@ -114,6 +114,8 @@ class Engine:
         base_version = state["state_version"]
         changes: list[dict[str, Any]] = []
         narration: list[str] = []
+        if state.get("pending_day_opening"):
+            narration.append(state.pop("pending_day_opening"))
         events: list[dict[str, Any]] = []
         memories: list[dict[str, Any]] = []
 
@@ -518,6 +520,8 @@ class Engine:
         base_version = state["state_version"]
         narration: list[str] = []
         changes: list[dict[str, Any]] = []
+        if state.get("pending_day_opening"):
+            narration.append(state.pop("pending_day_opening"))
         events: list[dict[str, Any]] = []
 
         before_scene = state["scene"]
@@ -812,15 +816,27 @@ class Engine:
         if target is None:
             return False, ""
         new_day, new_scene = target
+        day_changed = new_day != day
         state["day"] = new_day
         state["scene"] = new_scene
         state["return_scene"] = None
-        if new_day != day:
+        if day_changed:
+            # 第二天的开场旁白留到下一天的第一回合展示，不能和第一天的告别挤在同一屏。
+            state["pending_day_opening"] = "第二天放学后，教室里只剩下你们两个。"
             if scene == "school_gate":
-                return True, "她把书包带整理好，朝你摆了摆手：「明天放学后见。」\n第二天放学后，教室里只剩下你们两个。"
+                return True, "她把书包带整理好，朝你摆了摆手：「明天放学后见。」"
             if scene == "shop":
-                return True, "你们从小卖部出来。第二天放学后，教室里只剩下你们两个。"
-            return True, "第二天放学后，教室里只剩下你们两个。窗外的光比昨天暗得早一些。"
+                return True, "你们从小卖部出来。"
+            return True, ""
+        if day == 1 and scene == "classroom" and new_scene == "school_gate":
+            return True, "放学铃响过，你们收好书包，一前一后下了楼。校门口的路灯刚亮。"
+        if day == 2 and scene == "classroom" and new_scene == "school_gate":
+            return True, "第二天傍晚，你们收好书包下楼。校门口的路灯一盏一盏亮起来。"
+        if scene == "classroom" and new_day == 2:
+            return True, "第二天放学后，教室里只剩下你们两个。"
+        if scene == "school_gate" and new_scene == "classroom":
+            return True, "第二天放学后，教室里只剩下你们两个。"
+        return True, "你们回到校门口，风把白天的热气吹散了。"
         if day == 1 and scene == "classroom" and new_scene == "school_gate":
             return True, "放学铃响过，你们收好书包，一前一后下了楼。校门口的路灯刚亮。"
         if day == 2 and scene == "classroom" and new_scene == "school_gate":
