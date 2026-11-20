@@ -19,6 +19,8 @@ image xuzhi surprised = "images/xuzhi_surprised.png"
 transform sprite_pos:
     xalign 0.5
     yalign 1.0
+    fit "scale-down"
+    xysize (1280, 720)
 
 default persistent.endings_seen = {}
 
