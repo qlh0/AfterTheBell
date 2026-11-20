@@ -47,6 +47,16 @@ EMOTION_CN = {
     "sad": "低落",
     "annoyed": "有点恼",
     "soft": "心软",
+    "shy": "害羞",
+    "surprised": "意外",
+}
+
+SCENE_CN = {
+    "classroom": "教室（放学后）",
+    "school_gate": "校门口（傍晚）",
+    "corridor": "走廊",
+    "library": "图书馆",
+    "shop": "小卖部",
 }
 
 TOPIC_CN = {
@@ -179,7 +189,9 @@ def user_prompt(
     memories: list[dict[str, Any]],
 ) -> str:
     char = content.characters["xuzhi"]
-    scene_cn = "教室（放学后）" if state["scene"] == "classroom" else "校门口（傍晚）"
+    scene_cn = SCENE_CN.get(state["scene"], "校门口（傍晚）")
+    if state["scene"] == "classroom" and int(state.get("day", 1)) == 2:
+        scene_cn = "第二天教室（放学后）"
     rel = state["relationship"]
     emotion = gs.derive_emotion(state)
 
@@ -279,6 +291,8 @@ def user_prompt(
         "（比如「你在走廊跟陈屿说的那句」/「桌上那张分班意向表」），不要让玩家猜。",
         "- 不要主动提起已经结束的事件或旧话题（比如已经收回去的便签），除非玩家这一句提到了它。",
         "- 不要一次把误会、分班、心意全讲完；一次只推进一点。",
+        "- **对话只发生在【场景】标出的当前地点**。玩家提到别的地点时，如果你还没有真的到那里，"
+        "不要假装已经到达、不要描写那里的东西；先回应邀请或说明现在的状况。",
         "- **不要用「话到嘴边又忘了」「欲言又止」「算了，没什么」来拖节奏**；"
         "如果她真想说，就直接说具体内容；如果不想说，就明确收住，让玩家能继续。",
     ]

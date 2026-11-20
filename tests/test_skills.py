@@ -18,6 +18,14 @@ def test_writing_craft_files_exist_and_are_nonempty():
         assert path.read_text(encoding="utf-8").strip()
 
 
+def test_scene_prompt_covers_all_scene_ids():
+    assert prompts.SCENE_CN["classroom"] == "教室（放学后）"
+    assert prompts.SCENE_CN["school_gate"] == "校门口（傍晚）"
+    assert prompts.SCENE_CN["corridor"] == "走廊"
+    assert prompts.SCENE_CN["library"] == "图书馆"
+    assert prompts.SCENE_CN["shop"] == "小卖部"
+
+
 def test_prompt_loads_dialogue_scene_and_ending_crafts():
     content = load_content()
 

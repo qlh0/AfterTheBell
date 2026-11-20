@@ -127,6 +127,22 @@ class Engine:
         # 1. 新回合开始：激活已排期事件（或进入收束/finale）
         before_scene = state["scene"]
         before_day = int(state.get("day", 1))
+        returned_text = self._apply_pending_return(state)
+        if returned_text:
+            narration.append(returned_text)
+            changes.append({
+                "path": "scene",
+                "before": f"day{before_day}:{before_scene}",
+                "after": f"day{state.get('day', 1)}:{state['scene']}",
+                "reason": "return_after_activity",
+            })
+            events.append({
+                "event_id": "scene_transition",
+                "kind": "scene",
+                "status": "committed",
+                "payload": {"day": state.get("day", 1), "to": state["scene"],
+                            "reason": "return_after_activity"},
+            })
         analysis = meaningful_turn.analyze(text)
         activation = None
         if config.STORYLETS_ENABLED and state["ending_phase"] != "committed":
@@ -285,9 +301,6 @@ class Engine:
                         changes.extend(resolution.changes)
                         narration.extend(resolution.narration)
                         scheduler.clear_active(state)
-                        if self._restore_scene(state) and active.enter_scene:
-                            if state["scene"] == "school_gate":
-                                narration.append("你们回到校门口，天色又暗了一点。")
                         resolved_id = active.id
                         resolved_set.append(active.id)
                         state["last_storylet_resolved_turn"] = state["turn_index"]
@@ -319,9 +332,6 @@ class Engine:
                             "turn": state["turn_index"],
                         })
                         scheduler.clear_active(state)
-                        if self._restore_scene(state) and active.enter_scene:
-                            if state["scene"] == "school_gate":
-                                narration.append("你们回到校门口，天色又暗了一点。")
                         narration.append("她没再继续这个话题。")
                         events.append({
                             "event_id": active.id, "kind": "storylet", "status": "abandoned",
@@ -935,6 +945,19 @@ class Engine:
         if (day, scene) == (2, "classroom") and state["turn_index"] >= 18:
             return self._advance_main_scene(state)
         return False, ""
+
+    def _apply_pending_return(self, state: dict[str, Any]) -> str:
+        """上一段插曲结束后，下一次进入校门口时再切场景，避免结算台词和背景错位。"""
+        return_scene = state.get("return_scene")
+        if not return_scene or state.get("active_storylet"):
+            return ""
+        state["return_scene"] = None
+        if state["scene"] == return_scene:
+            return ""
+        state["scene"] = return_scene
+        if return_scene == "school_gate":
+            return "你们回到校门口，天色又暗了一点。"
+        return ""
 
     def _restore_scene(self, state: dict[str, Any]) -> bool:
         return_scene = state.get("return_scene")

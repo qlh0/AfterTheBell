@@ -67,8 +67,12 @@ def test_library_activity_from_suggestion_text(engine):
     engine.interact(gid, "那我们先把这页看完吧。", "req_lib_003")
     st = _state(engine, gid)
     assert st["facts"]["library_visited"] is True
-    assert st["scene"] == "school_gate"
+    assert st["scene"] == "library", "结算台词仍应停留在图书馆"
     assert st["active_storylet"] is None
+
+    engine.interact(gid, "我们回校门口吧。", "req_lib_004")
+    st = _state(engine, gid)
+    assert st["scene"] == "school_gate"
 
 
 def test_corridor_activity_between_classroom_and_gate(engine):
@@ -87,6 +91,10 @@ def test_corridor_activity_between_classroom_and_gate(engine):
     engine.interact(gid, "其实我只是有点担心你。", "req_cor_003")
     st = _state(engine, gid)
     assert st["facts"]["corridor_chatted"] is True
+    assert st["scene"] == "corridor", "结算台词仍应停留在走廊"
+
+    engine.interact(gid, "我们回校门口吧。", "req_cor_004")
+    st = _state(engine, gid)
     assert st["scene"] == "school_gate"
 
 
@@ -213,6 +221,7 @@ def test_activity_chips_respect_scene_and_used(engine):
     engine.interact(gid, "陪我去走廊站一会儿吧。", "req_chip_001")
     engine.interact(gid, "你最近是不是在躲我？", "req_chip_002")
     engine.interact(gid, "其实我只是有点担心你。", "req_chip_003")
+    engine.interact(gid, "我们回校门口吧。", "req_chip_004")
     st = _state(engine, gid)
     # 已经用过走廊，不再出现；此时已回到校门口，应有小卖部提示
     chips = {item["id"] for item in suggestion_rules.suggestions(st)}
