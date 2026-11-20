@@ -834,14 +834,10 @@ class Engine:
 
     def _presentation(self, state: dict[str, Any]) -> dict[str, Any]:
         emotion = state["npc"]["current_emotion"]
-        scene_id = state["scene"]
-        day = int(state.get("day", 1))
-        if day == 2 and scene_id in ("classroom", "school_gate"):
-            scene_id = f"{scene_id}_day2"
         return {
-            "scene_id": scene_id,
-            "day": day,
-            "day_label": gs.DAY_LABELS[day],
+            "scene_id": state["scene"],
+            "day": int(state.get("day", 1)),
+            "day_label": gs.DAY_LABELS[int(state.get("day", 1))],
             "sprite_id": gs.sprite_for(emotion),
             "event_title": None,
             "event_badge": False,

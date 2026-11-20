@@ -25,8 +25,8 @@ GUI = ROOT / "game" / "gui"
 SCREEN = (1280, 720)
 SPRITE_HEIGHT = 700
 
-BACKGROUNDS = ("bg_classroom", "bg_school_gate")
-SPRITES = ("xuzhi_normal", "xuzhi_guarded", "xuzhi_smile")
+BACKGROUNDS = ("bg_classroom", "bg_school_gate", "bg_corridor", "bg_library", "bg_shop")
+SPRITES = ("xuzhi_normal", "xuzhi_guarded", "xuzhi_smile", "xuzhi_shy", "xuzhi_surprised")
 
 
 def ensure_sources() -> None:

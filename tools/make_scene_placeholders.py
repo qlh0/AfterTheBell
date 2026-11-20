@@ -4,8 +4,6 @@
     bg_corridor.png          走廊
     bg_library.png           图书馆
     bg_shop.png              小卖部
-    bg_classroom_day2.png    第二天教室
-    bg_school_gate_day2.png  第二天校门口
 """
 
 from __future__ import annotations
@@ -23,8 +21,6 @@ SCENES = {
     "corridor": ("走廊", (34, 45, 62), (96, 112, 132), "放学后的走廊，窗外是操场"),
     "library": ("图书馆", (52, 43, 34), (128, 104, 76), "放学后的图书馆，靠窗的位置"),
     "shop": ("小卖部", (70, 47, 30), (160, 112, 62), "校门口的小卖部，暖黄的灯"),
-    "classroom_day2": ("第二天 教室", (38, 40, 64), (92, 78, 102), "第二天放学后，教室里只剩下你们"),
-    "school_gate_day2": ("第二天 校门口", (28, 34, 54), (104, 72, 78), "第二天傍晚，校门口的路灯"),
 }
 
 

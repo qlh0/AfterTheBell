@@ -24,7 +24,7 @@ SCENE_FLOW = {
     (2, "classroom"): (2, "school_gate"),
 }
 DAY_LABELS = {1: "第一天", 2: "第二天"}
-EMOTIONS = ("guarded", "normal", "relieved", "happy", "hurt", "sad", "annoyed", "soft")
+EMOTIONS = ("guarded", "normal", "relieved", "happy", "hurt", "sad", "annoyed", "soft", "shy", "surprised")
 MUTUAL_INTENTS = ("unknown", "romance", "friendship", "declined")
 PHASES = ("none", "eligible", "prepared", "committed")
 
@@ -66,6 +66,8 @@ EMOTION_TO_SPRITE = {
     "relieved": "xuzhi_smile",
     "happy": "xuzhi_smile",
     "soft": "xuzhi_smile",
+    "shy": "xuzhi_shy",
+    "surprised": "xuzhi_surprised",
     "hurt": "xuzhi_guarded",
     "sad": "xuzhi_guarded",
     "annoyed": "xuzhi_guarded",

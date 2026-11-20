@@ -230,7 +230,7 @@ def user_prompt(
         *_action_lines(),
         "",
         "【输出】只输出一个 JSON 对象：",
-        '{"dialogue": "你这一句台词", "emotion": "guarded|normal|relieved|happy|hurt|sad|annoyed|soft", '
+        '{"dialogue": "你这一句台词", "emotion": "guarded|normal|relieved|happy|hurt|sad|annoyed|soft|shy|surprised", '
         '"actions": ["从上面选的 id"], "storylet_outcome": null, "npc_intent": null}',
         "storylet_outcome 只有在「现在正在发生的事件」存在时，才从可能的走向里选一个，否则填 null。",
         "",

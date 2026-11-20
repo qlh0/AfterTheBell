@@ -19,9 +19,7 @@ def test_advance_cycles_all_four_required_scenes(engine):
         st = _state(engine, gid)
         seen.append((st["day"], st["scene"]))
         assert data["presentation"]["day"] == st["day"]
-        assert data["presentation"]["scene_id"] in {
-            st["scene"], f"{st['scene']}_day2"
-        }
+        assert data["presentation"]["scene_id"] == st["scene"]
     assert seen == [
         (1, "classroom"),
         (1, "school_gate"),
@@ -112,6 +110,44 @@ def test_activity_chips_respect_scene_and_used(engine):
     assert "corridor" not in chips
     assert "shop" in chips
     assert st["scene"] == "school_gate"
+
+
+def test_activities_are_available_on_day2(engine):
+    # 第二天教室：图书馆/走廊仍可用
+    start = engine.start()
+    gid = start["game_id"]
+    engine.advance(gid, "req_day2_001", "continue")
+    engine.advance(gid, "req_day2_002", "continue")
+    st = _state(engine, gid)
+    assert (st["day"], st["scene"]) == (2, "classroom")
+    ids = {item["id"] for item in suggestion_rules.suggestions(st)}
+    assert {"library", "corridor"} <= ids
+
+    data = engine.interact(gid, "放学后要不要一起去图书馆学习？", "req_day2_003")
+    st = _state(engine, gid)
+    assert st["day"] == 2
+    assert st["active_storylet"] == "library_study"
+    assert st["scene"] == "library"
+    assert data["presentation"]["scene_id"] == "library"
+
+    # 第二天校门口：小卖部仍可用
+    start2 = engine.start()
+    gid2 = start2["game_id"]
+    for i in range(3):
+        engine.advance(gid2, f"req_day2s_{i:02d}", "continue")
+    st = _state(engine, gid2)
+    assert (st["day"], st["scene"]) == (2, "school_gate")
+    engine.interact(gid2, "一起去小卖部买点东西吧。", "req_day2s_shop")
+    st = _state(engine, gid2)
+    assert st["active_storylet"] == "shop_trip"
+    assert st["scene"] == "shop"
+
+
+def test_new_expression_sprites_are_mapped():
+    from app import game_state as gs
+
+    assert gs.sprite_for("shy") == "xuzhi_shy"
+    assert gs.sprite_for("surprised") == "xuzhi_surprised"
 
 
 def test_hard_cap_ends_at_22_with_closure_and_day2_gate(engine):

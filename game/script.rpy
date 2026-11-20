@@ -10,11 +10,11 @@ image bg school_gate = "images/bg_school_gate.png"
 image bg corridor = "images/bg_corridor.png"
 image bg library = "images/bg_library.png"
 image bg shop = "images/bg_shop.png"
-image bg classroom_day2 = "images/bg_classroom_day2.png"
-image bg school_gate_day2 = "images/bg_school_gate_day2.png"
 image xuzhi normal = "images/xuzhi_normal.png"
 image xuzhi guarded = "images/xuzhi_guarded.png"
 image xuzhi smile = "images/xuzhi_smile.png"
+image xuzhi shy = "images/xuzhi_shy.png"
+image xuzhi surprised = "images/xuzhi_surprised.png"
 
 transform sprite_pos:
     xalign 0.5
@@ -90,10 +90,10 @@ label selfcheck:
     $ atb_selfcheck_note("log_screen_ok res=%r" % (_res_log,))
     $ log_expanded = False
     python:
-        for _sid in ("corridor", "library", "shop", "classroom_day2", "school_gate_day2"):
+        for _sid in ("corridor", "library", "shop"):
             scene_id = _sid
-            day = 2 if _sid.endswith("_day2") else 1
-            day_label = "第二天" if day == 2 else "第一天"
+            day = 1
+            day_label = "第一天"
             displayed_scene = None
             atb_render_scene(transition=False)
             selfcheck_shot_name = "scene_" + _sid
