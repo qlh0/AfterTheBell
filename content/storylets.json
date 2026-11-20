@@ -285,7 +285,7 @@
       "manual_only": true,
       "trigger_keywords": ["小卖部", "买东西", "零食", "饮料"],
       "enter_scene": "shop",
-      "return_scene": "school_gate",
+      "return_scene": "shop",
       "enter_narration": "你们拐进校门口的小卖部，暖黄的灯亮着。",
       "opening_cue": "小卖部里只剩店员在理货，她在货架前停下来。",
       "exposition": ["小卖部的灯比外面亮，玻璃柜里摆着几排饮料。"],

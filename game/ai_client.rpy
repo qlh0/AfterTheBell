@@ -37,8 +37,12 @@ init -10 python:
         return True
 
     def atb_apply_presentation(presentation):
+        new_day = int(presentation.get("day", 1) or 1)
+        if new_day > int(store.day or 1):
+            # 不在网络回调里阻塞；由 chat_loop 统一播放黑屏转场
+            store.pending_day_break = presentation.get("day_label", "第二天")
         store.scene_id = presentation.get("scene_id", "classroom")
-        store.day = presentation.get("day", 1)
+        store.day = new_day
         store.day_label = presentation.get("day_label", "第一天")
         store.sprite_id = presentation.get("sprite_id", "xuzhi_guarded")
         store.current_event_title = presentation.get("event_title")

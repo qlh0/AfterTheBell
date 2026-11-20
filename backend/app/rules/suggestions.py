@@ -109,6 +109,8 @@ def suggestions(
                 items.append(_item("corridor", "走廊聊两句", "陪我去走廊站一会儿吧。"))
         elif scene == "school_gate" and "shop_trip" not in used:
             items.append(_item("shop", "去小卖部", "一起去小卖部买点东西吧。"))
+        elif scene == "shop" and "shop_trip" in used:
+            items.append(_item("return_gate", "回校门口", "我们回校门口吧。"))
 
         if not facts["player_asked_distance"]:
             items.append(_item("ask_distance", "问她怎么了", "你最近是不是在躲我？"))

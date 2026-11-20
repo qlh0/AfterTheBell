@@ -41,6 +41,19 @@ HARSH_WORDS = (
     "有病", "别烦我", "你算老几", "要你管",
 )
 
+# 分班是主线信息，不能用「随便报 / 查户口」这类话把玩家推开
+EVASIVE_CLASS_WORDS = (
+    "随便报", "随便填", "查户口", "关你什么事", "跟你没关系",
+    "你管得着", "少打听", "问这个干嘛", "问这么细",
+)
+CLASS_PLAN_WORDS = (
+    "理重点", "重点班", "理科", "文科", "物理", "历史", "方向",
+    "志愿", "还不确定", "没想好", "在犹豫",
+)
+CLASS_QUESTION_WORDS = (
+    "填", "报", "去哪", "哪里", "打算", "准备", "怎么想", "计划", "方向", "选",
+)
+
 
 class LLMResponseError(Exception):
     pass
@@ -48,6 +61,23 @@ class LLMResponseError(Exception):
 
 def _is_harsh(dialogue: str) -> bool:
     return any(word in dialogue for word in HARSH_WORDS)
+
+
+def _is_evasive_class(dialogue: str, analysis: Analysis) -> bool:
+    return "class_change" in analysis.topics and any(
+        word in dialogue for word in EVASIVE_CLASS_WORDS
+    )
+
+
+def _needs_class_plan(analysis: Analysis) -> bool:
+    """玩家在追问她的具体分班打算时，回复里必须落到一个具体方向。"""
+    return "class_change" in analysis.topics and any(
+        word in analysis.normalized for word in CLASS_QUESTION_WORDS
+    )
+
+
+def _has_class_plan(dialogue: str) -> bool:
+    return any(word in dialogue for word in CLASS_PLAN_WORDS)
 
 
 _CONTENT: Content | None = None
@@ -189,6 +219,7 @@ def llm_reply(
     last_error = ""
     usage: dict[str, Any] = {}
     tone_retried = False
+    class_retried = False
 
     for attempt in range(1 + max(0, config.LLM_MAX_RETRIES)):
         try:
@@ -243,6 +274,30 @@ def llm_reply(
             soft = mock_character.reply(state, analysis, storylet, expected_ending)
             soft.source = "fallback:too_harsh"
             soft.error = "too_harsh"
+            soft.latency_ms = int((time.monotonic() - started) * 1000)
+            soft.model = config.LLM_MODEL
+            soft.prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
+            soft.completion_tokens = int(usage.get("completion_tokens", 0) or 0)
+            return soft
+
+        # 分班问题不能用「随便报 / 查户口」搪塞，也不能只说「还是这学校」；先要求重写一次
+        if _is_evasive_class(reply.dialogue, analysis) or (
+            _needs_class_plan(analysis) and not _has_class_plan(reply.dialogue)
+        ):
+            if not class_retried:
+                class_retried = True
+                last_error = "class_evasive"
+                messages = messages + [
+                    {"role": "assistant", "content": str(raw)[:600]},
+                    {"role": "user",
+                     "content": "玩家在认真问你的分班打算，不要用「随便报」「查户口」「问这个干嘛」搪塞，"
+                                "也不要只回答「还是这学校」。请正面给出一个具体信息（例如理重点班、"
+                                "物理方向、还在犹豫），并说明这是你自己的决定。保持你有点紧张的语气，只输出 JSON。"},
+                ]
+                continue
+            soft = mock_character.reply(state, analysis, storylet, expected_ending)
+            soft.source = "fallback:class_evasive"
+            soft.error = "class_evasive"
             soft.latency_ms = int((time.monotonic() - started) * 1000)
             soft.model = config.LLM_MODEL
             soft.prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)

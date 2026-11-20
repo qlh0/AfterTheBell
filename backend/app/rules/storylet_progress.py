@@ -24,9 +24,9 @@ MAX_TURNS = {
     "shared_memory": 2,
     "unfinished_conversation": 3,
     "school_gate_finale": 3,
-    "library_study": 2,
-    "corridor_chat": 2,
-    "shop_trip": 2,
+    "library_study": 3,
+    "corridor_chat": 3,
+    "shop_trip": 3,
 }
 
 # 各事件激活时的初始证据
@@ -39,7 +39,10 @@ INITIAL_EVIDENCE = {
 ACCEPT_WORDS = ("一起", "走吧", "好", "行", "可以", "顺路", "陪你", "走一段", "那走")
 DECLINE_WORDS = ("不用", "算了", "自己走", "先走", "不必", "不了", "你走吧")
 FUTURE_WORDS = ("以后", "未来", "分班后", "见不到", "一起走", "还能", "下学期", "以后还")
-PLAN_WORDS = ("报", "考", "决定", "打算", "计划", "想读", "申请", "填")
+PLAN_WORDS = (
+    "理重点", "重点班", "理科", "文科", "物理", "历史", "方向",
+    "报理", "报文", "志愿", "还不确定", "没想好", "在犹豫",
+)
 
 
 @dataclass
@@ -184,8 +187,8 @@ def evaluate(
     turns = _turns(state)
     rel = state["relationship"]
 
-    # 插曲场景：进入当轮只铺情境，至少留一轮给玩家回应
-    if sid in ("library_study", "corridor_chat", "shop_trip") and turns < 2:
+    # 插曲场景：进入当轮只铺情境，至少留两轮给玩家回应
+    if sid in ("library_study", "corridor_chat", "shop_trip") and turns < 3:
         return Progress(None, "先看看她的反应")
 
     if sid == "old_note":
@@ -345,7 +348,7 @@ def allowed_outcomes(
     turns = _turns(state)
     sid = storylet.id
 
-    if sid in ("library_study", "corridor_chat", "shop_trip") and turns < 2:
+    if sid in ("library_study", "corridor_chat", "shop_trip") and turns < 3:
         return set()
 
     if sid == "late_explanation":
@@ -441,7 +444,7 @@ def allowed_outcomes(
             return {"studied_together"}
         if ev.get("studied") or ev.get("engaged"):
             return {"studied_quietly"}
-        if turns >= 2:
+        if turns >= 3:
             return {"studied_quietly"}
         return set()
 
@@ -450,7 +453,7 @@ def allowed_outcomes(
             return {"interrupted"}
         if ev.get("chatted"):
             return {"chatted"}
-        if turns >= 2 or ev.get("awkward"):
+        if turns >= 3 or ev.get("awkward"):
             return {"awkward"}
         return set()
 
@@ -459,7 +462,7 @@ def allowed_outcomes(
             return {"ran_into_classmate"}
         if ev.get("bought"):
             return {"bought_together"}
-        if ev.get("left") or turns >= 2:
+        if ev.get("left") or turns >= 3:
             return {"went_alone"}
         return set()
 

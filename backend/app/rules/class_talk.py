@@ -13,8 +13,14 @@ from typing import Any
 from .. import game_state as gs
 from .meaningful_turn import Analysis
 
-PLAN_WORDS = ("填", "报", "理重点", "重点班", "申请", "录", "分班")
-DEFLECT_WORDS = ("不想说", "别问", "以后再说", "没什么好说", "跟你没关系")
+PLAN_WORDS = (
+    "理重点", "重点班", "理科", "文科", "物理", "历史", "方向",
+    "报理", "报文", "志愿", "还不确定", "没想好", "在犹豫",
+)
+DEFLECT_WORDS = (
+    "不想说", "别问", "以后再说", "没什么好说", "跟你没关系",
+    "随便报", "随便填", "查户口", "问这个干嘛", "关你什么事",
+)
 
 
 def commit(state: dict[str, Any], analysis: Analysis, dialogue: str) -> list[dict[str, Any]]:

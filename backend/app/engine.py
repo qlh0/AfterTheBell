@@ -166,7 +166,30 @@ class Engine:
 
         active = self.content.storylets.get(state["active_storylet"])
 
-        # 3. 角色回复：普通对话只在这里调用一次 Agent
+        # 3. 小卖部是校外场景：默认留在小卖部；只有玩家明确说回去才移动。
+        if (
+            not state.get("active_storylet")
+            and state["scene"] == "shop"
+            and self._mentions_return_to_school(analysis)
+        ):
+            old_day = int(state.get("day", 1))
+            state["scene"] = "school_gate"
+            state["return_scene"] = None
+            narration.append("你们拎着东西从小卖部出来，走回校门口。")
+            changes.append({
+                "path": "scene",
+                "before": f"day{old_day}:shop",
+                "after": f"day{old_day}:school_gate",
+                "reason": "return_from_shop",
+            })
+            events.append({
+                "event_id": "scene_transition",
+                "kind": "scene",
+                "status": "committed",
+                "payload": {"day": old_day, "to": "school_gate", "reason": "return_from_shop"},
+            })
+
+        # 4. 角色回复：普通对话只在这里调用一次 Agent
         expected_ending = None
         if active is not None and active.kind == "finale":
             expected_ending = ending_rules.preview_ending(state, self.content)
@@ -256,7 +279,8 @@ class Engine:
                         narration.extend(resolution.narration)
                         scheduler.clear_active(state)
                         if self._restore_scene(state) and active.enter_scene:
-                            narration.append("你们回到校门口，天色又暗了一点。")
+                            if state["scene"] == "school_gate":
+                                narration.append("你们回到校门口，天色又暗了一点。")
                         resolved_id = active.id
                         resolved_set.append(active.id)
                         state["last_storylet_resolved_turn"] = state["turn_index"]
@@ -289,7 +313,8 @@ class Engine:
                         })
                         scheduler.clear_active(state)
                         if self._restore_scene(state) and active.enter_scene:
-                            narration.append("你们回到校门口，天色又暗了一点。")
+                            if state["scene"] == "school_gate":
+                                narration.append("你们回到校门口，天色又暗了一点。")
                         narration.append("她没再继续这个话题。")
                         events.append({
                             "event_id": active.id, "kind": "storylet", "status": "abandoned",
@@ -743,7 +768,11 @@ class Engine:
         day = int(state.get("day", 1))
         scene = state["scene"]
         if scene in gs.OPTIONAL_SCENES:
-            target = (day, state.get("return_scene") or "school_gate")
+            if scene == "shop":
+                # 小卖部在校外：默认不回校门口；推进时间才离开
+                target = (2, "school_gate") if day == 2 else (2, "classroom")
+            else:
+                target = (day, state.get("return_scene") or "school_gate")
         else:
             target = gs.SCENE_FLOW.get((day, scene))
         if target is None:
@@ -791,9 +820,16 @@ class Engine:
         return_scene = state.get("return_scene")
         if not return_scene:
             return False
-        state["scene"] = return_scene
         state["return_scene"] = None
+        if state["scene"] == return_scene:
+            return False
+        state["scene"] = return_scene
         return True
+
+    @staticmethod
+    def _mentions_return_to_school(analysis: Any) -> bool:
+        text = analysis.normalized
+        return any(word in text for word in ("回校门口", "回学校", "回校", "校门口"))
 
     def _force_closure_if_due(self, state: dict[str, Any]) -> tuple[bool, str]:
         """第 22 轮前必须把场景拉到第二天校门口，并留一段收束对话。"""

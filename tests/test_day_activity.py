@@ -61,6 +61,11 @@ def test_library_activity_from_suggestion_text(engine):
 
     engine.interact(gid, "这道题你会吗？", "req_lib_002")
     st = _state(engine, gid)
+    assert st["active_storylet"] == "library_study", "第二轮仍应在图书馆"
+    assert st["scene"] == "library"
+
+    engine.interact(gid, "那我们先把这页看完吧。", "req_lib_003")
+    st = _state(engine, gid)
     assert st["facts"]["library_visited"] is True
     assert st["scene"] == "school_gate"
     assert st["active_storylet"] is None
@@ -75,6 +80,11 @@ def test_corridor_activity_between_classroom_and_gate(engine):
     assert st["scene"] == "corridor"
 
     engine.interact(gid, "你最近是不是在躲我？", "req_cor_002")
+    st = _state(engine, gid)
+    assert st["active_storylet"] == "corridor_chat", "第二轮仍应在走廊"
+    assert st["scene"] == "corridor"
+
+    engine.interact(gid, "其实我只是有点担心你。", "req_cor_003")
     st = _state(engine, gid)
     assert st["facts"]["corridor_chatted"] is True
     assert st["scene"] == "school_gate"
@@ -92,8 +102,60 @@ def test_shop_activity_after_gate(engine):
 
     engine.interact(gid, "你想喝什么？我请你。", "req_shop_002")
     st = _state(engine, gid)
+    assert st["active_storylet"] == "shop_trip", "第二轮仍应在小卖部"
+    assert st["scene"] == "shop"
+
+    engine.interact(gid, "买两瓶一样的吧，路上喝。", "req_shop_003")
+    st = _state(engine, gid)
     assert st["facts"]["shop_visited"] is True
-    assert st["scene"] == "school_gate"
+    assert st["scene"] == "shop", "小卖部结束后默认不回校门口"
+    assert st["active_storylet"] is None
+
+    engine.interact(gid, "我们回校门口吧。", "req_shop_004")
+    st = _state(engine, gid)
+    assert st["scene"] == "school_gate", "玩家明确说回去时才回校门口"
+
+
+def test_shop_advance_leaves_shop_for_next_day(engine):
+    start = engine.start()
+    gid = start["game_id"]
+    engine.advance(gid, "req_shop_adv_000", "continue")
+    engine.interact(gid, "一起去小卖部买点东西吧。", "req_shop_adv_001")
+    for i in range(2):
+        engine.interact(gid, "买两瓶一样的吧。", f"req_shop_adv_{i + 2:03d}")
+    st = _state(engine, gid)
+    assert (st["day"], st["scene"]) == (1, "shop")
+
+    engine.advance(gid, "req_shop_adv_leave", "continue")
+    st = _state(engine, gid)
+    assert (st["day"], st["scene"]) == (2, "classroom")
+
+
+def test_class_change_evasion_is_detected():
+    from app.agents.llm_character import _has_class_plan, _is_evasive_class, _needs_class_plan
+    from app.rules import meaningful_turn
+
+    analysis = meaningful_turn.analyze("分班的事，你是怎么想的？")
+    assert "class_change" in analysis.topics
+    assert _is_evasive_class("随便报个呗，你查户口啊？", analysis)
+    assert not _is_evasive_class("我填了理重点班，我想了很久。", analysis)
+    assert _needs_class_plan(analysis)
+    assert not _has_class_plan("还是这学校啊，还能去哪。")
+    assert _has_class_plan("我填了理重点班，我想了很久。")
+
+
+def test_class_talk_requires_concrete_plan(engine):
+    from app.rules import class_talk
+    from app.rules.meaningful_turn import analyze
+
+    start = engine.start()
+    state = _state(engine, start["game_id"])
+    state["facts"]["class_change_discussed"] = False
+    analysis = analyze("分班的事，你是怎么想的？")
+    assert class_talk.commit(state, analysis, "就，填了张表呗。") == []
+    changes = class_talk.commit(state, analysis, "我填了理重点班，我想了很久。")
+    assert changes
+    assert state["facts"]["class_change_discussed"] is True
 
 
 def test_activity_chips_respect_scene_and_used(engine):
@@ -104,6 +166,7 @@ def test_activity_chips_respect_scene_and_used(engine):
 
     engine.interact(gid, "陪我去走廊站一会儿吧。", "req_chip_001")
     engine.interact(gid, "你最近是不是在躲我？", "req_chip_002")
+    engine.interact(gid, "其实我只是有点担心你。", "req_chip_003")
     st = _state(engine, gid)
     # 已经用过走廊，不再出现；此时已回到校门口，应有小卖部提示
     chips = {item["id"] for item in suggestion_rules.suggestions(st)}

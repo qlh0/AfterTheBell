@@ -182,6 +182,19 @@ screen chat_ui():
     key "K_RETURN" action If(not store.log_expanded and store.panel_mode == "dialogue" and store.input_text.strip() != "", Return(("send", store.input_text)), NullAction())
 
 
+screen day_break(day_label):
+    zorder 300
+    modal True
+    add Solid("#000000")
+    vbox:
+        xalign 0.5
+        yalign 0.5
+        spacing 12
+        text day_label size 56 color "#f2f2f2" xalign 0.5
+        text "放学后" size 22 color "#a8a8a8" xalign 0.5
+    timer 1.4 action Return()
+
+
 screen thinking_overlay():
     zorder 200
     frame:
