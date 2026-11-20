@@ -35,6 +35,7 @@ default displayed_scene = None
 default displayed_sprite = None
 default pending_day_break = None
 default pending_day_presentation = None
+default selfcheck_ending_id = "romance"
 default current_event_title = None
 default chat_log = []
 default current_narration = []
@@ -112,15 +113,15 @@ label selfcheck:
     $ atb_selfcheck_note("day_transition_apply_ok")
     $ _res_day = renpy.call_screen("day_break", day_label="第二天")
     $ atb_selfcheck_note("day_break_ok res=%r" % (_res_day,))
-    $ _demo_ending = {"id": "romance", "title": "测试结局", "subtitle": "SELF CHECK",
-                      "epilogue": ["第一行测试文本。", "第二行测试文本。"], "closing_line": "——测试用结尾。"}
+    $ atb_selfcheck_note("ending_begin")
     python:
         import json
         with open(os.path.join(config.gamedir, "..", "content", "endings.json"), encoding="utf-8") as _f:
-            _demo_ending = json.load(_f)["endings"]["romance"]
-    $ atb_selfcheck_note("ending_begin")
-    $ _ending_res = renpy.call_screen("ending_view", _demo_ending)
-    $ atb_selfcheck_note("ending_screen_ok res=%r" % (_ending_res,))
+            _all_endings = json.load(_f)["endings"]
+        for _eid in ("romance", "friends", "missed"):
+            selfcheck_ending_id = _eid
+            _ending_res = renpy.call_screen("ending_view", _all_endings[_eid])
+            atb_selfcheck_note("ending_%s_ok res=%r" % (_eid, _ending_res))
     $ selfcheck_mode = False
     $ atb_selfcheck_note("done")
     $ renpy.quit()

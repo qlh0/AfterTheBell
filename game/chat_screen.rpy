@@ -259,7 +259,7 @@ screen ending_view(ending):
     zorder 100
 
     if store.selfcheck_mode:
-        timer 0.6 action Function(atb_screenshot, "ending")
+        timer 0.6 action Function(atb_screenshot, "ending_" + store.selfcheck_ending_id)
         timer 0.9 action Return(True)
 
     add Solid("#05070bcc")
