@@ -22,6 +22,7 @@ from .memory import store as memory_store
 from .narrative import director_llm, scheduler
 from .rules import actions as action_rules
 from .rules import class_talk
+from .rules import day_plan
 from .rules import goals as goal_rules
 from .rules import endings as ending_rules
 from .rules import meaningful_turn, storylet_resolution, suggestions as suggestion_rules
@@ -58,6 +59,10 @@ class GameNotEnded(Exception):
     def __init__(self, game_id: str) -> None:
         super().__init__(f"本局还没有结束：{game_id}")
         self.game_id = game_id
+
+
+class DayPlanNotAvailable(Exception):
+    pass
 
 
 class Engine:
@@ -631,6 +636,65 @@ class Engine:
                               state["state_version"], branch_id=branch_id)
         return response
 
+    def submit_day_plan(
+        self,
+        game_id: str,
+        text: str,
+        request_id: str,
+        expected_state_version: int | None = None,
+    ) -> dict[str, Any]:
+        """第二天开始时保存玩家的一句轻量计划；只影响开场和提示，不改事实/关系。"""
+        state = self.db.load_state(game_id)
+        if state is None:
+            raise GameNotFound(game_id)
+        branch_id = state.get("branch_id", "main")
+        cached = self.db.get_cached_response(game_id, request_id, branch_id)
+        if cached is not None:
+            return cached
+        if state["ending_phase"] == "committed":
+            raise EndingCommitted(state.get("ending_id"))
+        if expected_state_version is not None and expected_state_version != state["state_version"]:
+            raise VersionConflict(state["state_version"], state)
+        if int(state.get("day", 1)) != 2 or state["scene"] != "classroom":
+            raise DayPlanNotAvailable("第二天计划只能在第二天教室开始时提交")
+        current = state.get("day2_plan") or {}
+        if current.get("status") == "consumed":
+            raise DayPlanNotAvailable("第二天计划已经提交过")
+        if current.get("status") not in (None, "none", "pending"):
+            raise DayPlanNotAvailable("当前不能提交第二天计划")
+
+        base_version = state["state_version"]
+        plan = day_plan.plan_payload(text)
+        state["day2_plan"] = plan
+        state.pop("pending_day_opening", None)
+        state["state_version"] = base_version + 1
+
+        response = {
+            "game_id": game_id,
+            "request_id": request_id,
+            "state_version": state["state_version"],
+            "narration": [plan["opening"]],
+            "opening": plan["opening"],
+            "day2_plan": dict(plan),
+            "presentation": self._presentation(state),
+            "suggestions": suggestion_rules.suggestions(state, None),
+            "turn": self._turn_view(state),
+            "state": self._public_state(state),
+        }
+        if not self.db.save_state_cas(state, base_version, request_id, "day-plan", response):
+            latest = self.db.load_state(game_id) or state
+            raise VersionConflict(latest.get("state_version", -1), latest)
+        self.db.add_event(
+            game_id,
+            "day2_plan",
+            "system",
+            "committed",
+            {"tags": plan["tags"], "status": plan["status"]},
+            state["state_version"],
+            branch_id=branch_id,
+        )
+        return response
+
     # ---------------- 对外：读取 ----------------
 
     def get_state(self, game_id: str, include_internal: bool = False) -> dict[str, Any]:
@@ -823,6 +887,12 @@ class Engine:
         if day_changed:
             # 第二天的开场旁白留到下一天的第一回合展示，不能和第一天的告别挤在同一屏。
             state["pending_day_opening"] = "第二天放学后，教室里只剩下你们两个。"
+            if int(state.get("day", 1)) == 2:
+                state.setdefault("day2_plan", {
+                    "text": "", "tags": [], "status": "none", "opening": "",
+                })
+                if state["day2_plan"].get("status") != "consumed":
+                    state["day2_plan"]["status"] = "pending"
             if scene == "school_gate":
                 return True, "她把书包带整理好，朝你摆了摆手：「明天放学后见。」"
             if scene == "shop":

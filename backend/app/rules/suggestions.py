@@ -131,6 +131,25 @@ def suggestions(
     if len(items) < 2:
         items.append(_item("smalltalk", "聊点日常", "晚上还有作业吗？"))
 
+    # 第二天计划只调整已有提示的顺序，不新增条件、不改剧情。
+    plan_tags = set((state.get("day2_plan") or {}).get("tags") or [])
+    priority: list[str] = []
+    if "clarify" in plan_tags:
+        priority = ["class", "clarify", "ask_distance"]
+    elif "study" in plan_tags:
+        priority = ["library"]
+    elif "snack" in plan_tags:
+        priority = ["shop", "return_gate"]
+    elif "confess" in plan_tags:
+        priority = ["heart"]
+    if priority:
+        front = []
+        for pid in priority:
+            for item in items:
+                if item["id"] == pid and item not in front:
+                    front.append(item)
+        items = front + [item for item in items if item not in front]
+
     # 去重 + 截断
     seen: set[str] = set()
     unique: list[dict[str, str]] = []

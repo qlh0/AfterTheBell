@@ -35,6 +35,8 @@ default displayed_scene = None
 default displayed_sprite = None
 default pending_day_break = None
 default pending_day_presentation = None
+default pending_day_plan = False
+default day_plan_opening = ""
 default selfcheck_ending_id = "romance"
 default current_event_title = None
 default chat_log = []
@@ -83,6 +85,8 @@ label selfcheck:
         $ atb_selfcheck_note("screen_ok res=%r" % (_res,))
         $ _err = atb_advance()
         $ atb_selfcheck_note("advance_err=%r scene=%s sprite=%s" % (_err, scene_id, sprite_id))
+        $ _err = atb_advance()
+        $ atb_selfcheck_note("advance2_err=%r pending_plan=%r" % (_err, pending_day_plan))
     $ atb_selfcheck_note("chat_log=%d suggestions=%d" % (len(chat_log), len(suggestions)))
     $ atb_render_scene(transition=False)
     $ selfcheck_shot_name = "chat"
@@ -110,7 +114,12 @@ label selfcheck:
     $ pending_day_presentation = None
     $ atb_selfcheck_note("day_committed day=%s scene=%s" % (day, scene_id))
     $ pending_day_break = None
+    $ pending_day_plan = False
     $ atb_selfcheck_note("day_transition_apply_ok")
+    $ atb_render_scene(transition=False)
+    $ _plan_text = renpy.call_screen("day_plan")
+    $ _plan_err = atb_submit_day_plan(_plan_text)
+    $ atb_selfcheck_note("day_plan_ok err=%r opening=%s" % (_plan_err, day_plan_opening))
     $ _res_day = renpy.call_screen("day_break", day_label="第二天")
     $ atb_selfcheck_note("day_break_ok res=%r" % (_res_day,))
     $ atb_selfcheck_note("ending_begin")
@@ -136,6 +145,8 @@ label start:
     $ ending_data = None
     $ pending_day_break = None
     $ pending_day_presentation = None
+    $ pending_day_plan = False
+    $ day_plan_opening = ""
     $ displayed_scene = None
     $ displayed_sprite = None
     $ game_id = None
@@ -181,6 +192,15 @@ label chat_loop:
         call screen day_break(_day_break_label)
         $ atb_commit_presentation(pending_day_presentation)
         $ pending_day_presentation = None
+        $ atb_render_scene(transition=False)
+
+    if pending_day_plan:
+        $ pending_day_plan = False
+        $ _plan_text = renpy.call_screen("day_plan")
+        $ _plan_err = atb_submit_day_plan(_plan_text)
+        if _plan_err is None:
+            jump chat_loop
+        $ atb_log_error(_plan_err)
 
     if _res[0] == "advance":
         $ _err = atb_advance()

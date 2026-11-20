@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any
 
 from .. import game_state as gs
@@ -19,6 +20,23 @@ from ..rules.meaningful_turn import Analysis
 from ..rules.npc_intents import prompt_lines as npc_intent_lines
 
 _SYSTEM_FILE = PROMPTS_DIR / "character_system.txt"
+_CRAFT_DIR = PROMPTS_DIR / "writing"
+
+
+@lru_cache(maxsize=8)
+def _craft(name: str) -> str:
+    """按任务读取写作规范；缺失时返回空串，由测试保证仓库内文件存在。"""
+    path = _CRAFT_DIR / f"{name}.txt"
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8").strip()
+
+
+def _crafts_for(storylet: Storylet | None) -> list[str]:
+    crafts = [_craft("dialogue")]
+    if storylet is not None:
+        crafts.append(_craft("ending" if storylet.kind == "finale" else "scene"))
+    return [c for c in crafts if c]
 
 EMOTION_CN = {
     "guarded": "戒备/回避",
@@ -125,7 +143,7 @@ def _pacing_note(state: dict[str, Any]) -> str:
     return "离天黑还有时间，气氛还没有被逼到必须摊牌。"
 
 
-def system_prompt(content: Content) -> str:
+def system_prompt(content: Content, storylet: Storylet | None = None) -> str:
     char = content.characters["xuzhi"]
     base = _SYSTEM_FILE.read_text(encoding="utf-8") if _SYSTEM_FILE.exists() else ""
     lines = [
@@ -146,6 +164,9 @@ def system_prompt(content: Content) -> str:
         "- 不要在台词里出现任何数字、属性名、系统词。",
         "- 只输出一个 JSON 对象，不要 markdown 代码块，不要解释。",
     ]
+    crafts = _crafts_for(storylet)
+    if crafts:
+        lines += ["", "【写作规范】", *crafts]
     return "\n".join(lines)
 
 
@@ -273,6 +294,6 @@ def build_messages(
     memories: list[dict[str, Any]],
 ) -> list[dict[str, str]]:
     return [
-        {"role": "system", "content": system_prompt(content)},
+        {"role": "system", "content": system_prompt(content, storylet)},
         {"role": "user", "content": user_prompt(state, analysis, storylet, content, recent_turns, memories)},
     ]

@@ -16,8 +16,15 @@ from fastapi.responses import JSONResponse
 
 from . import config
 from .db import Database
-from .engine import Engine, EndingCommitted, GameNotEnded, GameNotFound, VersionConflict
-from .schemas import AdvanceRequest, InteractRequest, StartRequest
+from .engine import (
+    DayPlanNotAvailable,
+    Engine,
+    EndingCommitted,
+    GameNotEnded,
+    GameNotFound,
+    VersionConflict,
+)
+from .schemas import AdvanceRequest, DayPlanRequest, InteractRequest, StartRequest
 
 API_VERSION = "0.3.2"
 
@@ -87,6 +94,15 @@ def create_app(db: Database | None = None) -> FastAPI:
             expected_state_version=body.expected_state_version,
         )
 
+    @app.post("/game/{game_id}/day-plan")
+    def day_plan(game_id: str, body: DayPlanRequest):
+        return engine.submit_day_plan(
+            game_id=game_id,
+            text=body.text,
+            request_id=body.request_id,
+            expected_state_version=body.expected_state_version,
+        )
+
     @app.get("/game/{game_id}/events")
     def events(game_id: str):
         return engine.get_events(game_id)
@@ -140,6 +156,13 @@ def create_app(db: Database | None = None) -> FastAPI:
         return JSONResponse(
             status_code=409,
             content={"error": "game_not_ended", "detail": "本局还没有结束，暂无对局记录。"},
+        )
+
+    @app.exception_handler(DayPlanNotAvailable)
+    async def _bad_day_plan(_request, exc: DayPlanNotAvailable):
+        return JSONResponse(
+            status_code=400,
+            content={"error": "day_plan_not_available", "detail": str(exc)},
         )
 
     return app

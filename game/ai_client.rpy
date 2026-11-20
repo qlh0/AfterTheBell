@@ -50,6 +50,8 @@ init -10 python:
             # 下一次操作前再黑屏转场，避免跨天回复出现在错误背景上。
             store.pending_day_presentation = dict(presentation)
             store.pending_day_break = presentation.get("day_label", "第二天")
+            if new_day == 2 and int(store.day or 1) == 1:
+                store.pending_day_plan = True
             return
         atb_commit_presentation(presentation)
 
@@ -170,6 +172,24 @@ init -10 python:
         atb_set_turn(data.get("narration", []), data.get("dialogue", ""))
         atb_apply_presentation(data["presentation"])
         store.suggestions = data.get("suggestions", []) or []
+        return None
+
+    def atb_submit_day_plan(text):
+        payload = {
+            "text": (text or "").strip(),
+            "request_id": atb_new_request_id(),
+            "expected_state_version": store.state_version,
+        }
+        data, err = atb_http("/game/%s/day-plan" % store.game_id, payload, timeout=20)
+        if err:
+            return err
+        store.state_version = data["state_version"]
+        store.day_plan_opening = data.get("opening", "")
+        store.suggestions = data.get("suggestions", []) or []
+        if store.day_plan_opening:
+            atb_append("narrator", store.day_plan_opening)
+            atb_set_turn([store.day_plan_opening], "")
+        atb_apply_presentation(data["presentation"])
         return None
 
     def atb_sync():

@@ -83,6 +83,12 @@ def default_state(game_id: str, goals: list[str], budget: int = 12) -> dict[str,
         "day": 1,
         "return_scene": None,
         "pending_day_opening": None,
+        "day2_plan": {
+            "text": "",
+            "tags": [],
+            "status": "none",  # none | pending | consumed
+            "opening": "",
+        },
         "time_slot": "after_school",
         "turn_index": 0,
         "meaningful_turns": 0,

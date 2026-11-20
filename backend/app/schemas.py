@@ -109,6 +109,17 @@ class AdvanceRequest(BaseModel):
     intent: Literal["continue", "leave_classroom"] = "continue"
 
 
+class DayPlanRequest(BaseModel):
+    text: str = Field(default="", max_length=200)
+    request_id: str = Field(min_length=8, max_length=64)
+    expected_state_version: int | None = None
+
+    @field_validator("text")
+    @classmethod
+    def _strip_plan(cls, v: str) -> str:
+        return v.strip()
+
+
 class InteractResponse(BaseModel):
     game_id: str
     request_id: str

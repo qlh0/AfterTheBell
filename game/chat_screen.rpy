@@ -221,6 +221,48 @@ screen day_break(day_label):
     timer 6.2 action Return()
 
 
+screen day_plan():
+    modal True
+    zorder 280
+    add Solid("#05070be6")
+    default plan_text = ""
+
+    if store.selfcheck_mode:
+        timer 0.2 action Function(atb_screenshot, "day_plan")
+        timer 0.4 action Return("明天想约她去图书馆，一起复习数学。")
+
+    frame:
+        background Solid("#0c1119f2")
+        xalign 0.5
+        yalign 0.5
+        xsize 760
+        padding (40, 32)
+
+        vbox:
+            spacing 12
+            text "第二天" size 22 color "#8fa0b8" xalign 0.5
+            text "放学后，你打算做什么？" size 30 color "#f2c9a2" xalign 0.5
+            text "写一句，或者直接选一个方向。她不会自动知道你的计划。" size 15 color "#a8b4c8" xalign 0.5 text_align 0.5
+            null height 4
+            input value ScreenVariableInputValue("plan_text") length 140 xalign 0.5
+            hbox:
+                xalign 0.5
+                spacing 10
+                textbutton "去图书馆把题讲清楚" style "chip_button" action SetScreenVariable("plan_text", "明天想约她去图书馆，把不会的题问清楚。")
+                textbutton "找她把话说开" style "chip_button" action SetScreenVariable("plan_text", "明天想找个机会，把昨天没说完的话说清楚。")
+            hbox:
+                xalign 0.5
+                spacing 10
+                textbutton "一起去小卖部" style "chip_button" action SetScreenVariable("plan_text", "明天想和她一起去小卖部，轻松一点。")
+                textbutton "顺其自然" style "chip_button" action SetScreenVariable("plan_text", "顺其自然。")
+            null height 4
+            hbox:
+                xalign 0.5
+                spacing 20
+                textbutton "确定" style "chat_button" action Return(plan_text.strip() or "顺其自然。")
+                textbutton "跳过，顺其自然" style "chat_button" action Return("顺其自然。")
+
+
 screen thinking_overlay():
     zorder 200
     frame:
