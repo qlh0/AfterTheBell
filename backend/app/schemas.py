@@ -120,6 +120,27 @@ class DayPlanRequest(BaseModel):
         return v.strip()
 
 
+class DiaryEntry(BaseModel):
+    """玩家能翻开的一页：原话 + 她的旁注，没有数值。"""
+
+    turn: int = 0
+    day: int = 1
+    day_label: str = ""
+    scene: str = ""
+    scene_label: str = ""
+    label: str = ""
+    quote: str = ""
+    note: str = ""
+
+
+class DiaryUpdate(BaseModel):
+    updated: bool = False
+    banner: str = ""
+    notice: str = ""
+    entry: DiaryEntry | None = None
+    count: int = 0
+
+
 class InteractResponse(BaseModel):
     game_id: str
     request_id: str
@@ -138,6 +159,7 @@ class InteractResponse(BaseModel):
     state: PublicState = Field(default_factory=PublicState)
     ending: EndingBlock | None = None
     suggestions: list[Suggestion] = Field(default_factory=list)
+    diary: DiaryUpdate = Field(default_factory=DiaryUpdate)
     ui_hints: dict[str, Any] = Field(default_factory=dict)
 
 

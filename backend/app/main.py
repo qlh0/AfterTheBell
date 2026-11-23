@@ -103,6 +103,10 @@ def create_app(db: Database | None = None) -> FastAPI:
             expected_state_version=body.expected_state_version,
         )
 
+    @app.get("/game/{game_id}/diary")
+    def diary(game_id: str):
+        return engine.get_diary(game_id)
+
     @app.get("/game/{game_id}/events")
     def events(game_id: str):
         return engine.get_events(game_id)

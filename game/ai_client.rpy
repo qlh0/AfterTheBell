@@ -121,9 +121,48 @@ init -10 python:
         widget.update_text(widget.content, widget.editable)
         renpy.restart_interaction()
 
+    def atb_apply_diary(data):
+        """便签本有新的一页时提示玩家，并记进本局能翻开的列表。"""
+        diary = (data or {}).get("diary") or {}
+        entry = diary.get("entry")
+        if diary.get("updated") and entry:
+            key = (entry.get("turn"), entry.get("quote"))
+            have = {(item.get("turn"), item.get("quote")) for item in store.diary_entries}
+            if key not in have:
+                store.diary_entries.append(entry)
+            store.diary_notice = diary.get("notice") or "她在便签本上又写了一笔。"
+            store.diary_banner = diary.get("banner") or "便签本更新了"
+            atb_append("narrator", store.diary_notice)
+            try:
+                renpy.notify(store.diary_banner)
+            except Exception:
+                pass
+        if diary.get("count") is not None:
+            store.diary_count = int(diary.get("count") or 0)
+
+    def atb_refresh_diary():
+        if not store.game_id:
+            return
+        data, err = atb_http("/game/%s/diary" % store.game_id, timeout=10)
+        if err or not isinstance(data, dict):
+            return
+        store.diary_entries = list(data.get("entries") or [])
+        store.diary_count = int(data.get("count") or len(store.diary_entries))
+
+    def atb_open_diary():
+        store.log_expanded = False
+        store.diary_open = True
+        store.diary_banner = ""
+        atb_refresh_diary()
+
     def atb_start():
         store.chat_log = []
         store.used_suggestions = []
+        store.diary_entries = []
+        store.diary_notice = ""
+        store.diary_banner = ""
+        store.diary_open = False
+        store.diary_count = 0
         data, err = atb_http("/game/start", {}, timeout=15)
         if err:
             return err
@@ -149,6 +188,7 @@ init -10 python:
         atb_set_turn(data.get("narration", []), data.get("dialogue", ""))
         atb_apply_presentation(data["presentation"])
         store.suggestions = data.get("suggestions", []) or []
+        atb_apply_diary(data)
         if data.get("ending"):
             store.ending_data = data["ending"]
 
@@ -250,6 +290,7 @@ init -10 python:
             store.state_version = remote
         store.displayed_scene = None
         store.displayed_sprite = None
+        atb_refresh_diary()
         atb_render_scene(transition=False)
         return None
 

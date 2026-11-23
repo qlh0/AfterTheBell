@@ -51,7 +51,64 @@ screen chat_ui():
     if store.selfcheck_mode:
         timer 0.8 action [Function(atb_screenshot, store.selfcheck_shot_name), Return(("quit", None))]
 
-    if store.log_expanded:
+    if store.diary_open:
+        ## ---------------- 右侧便签本（她的笔记本，不是聊天记录） ----------------
+        frame:
+            background Solid("#f4ead7f7")
+            xalign 1.0
+            xoffset -12
+            yoffset 58
+            xsize 420
+            ysize 650
+            padding (20, 14)
+
+            vbox:
+                spacing 8
+                hbox:
+                    text "许栀的便签本" size 18 color "#6b4530"
+                    text ("共 %d 页" % len(store.diary_entries)) size 12 color "#8a6a52" yalign 0.65
+                    null width 1
+                    textbutton "合上" style "log_button" action SetVariable("diary_open", False)
+
+                text "她习惯把别人随口的话留下来。嗯、哦、哈哈，不会进这本子。" size 13 color "#8a6a52"
+
+                if store.diary_notice:
+                    text store.diary_notice:
+                        substitute False
+                        size 14
+                        color "#7a5340"
+                        italic True
+                        xsize 360
+
+                viewport:
+                    ysize 520
+                    mousewheel True
+                    draggable True
+                    yinitial 1.0
+                    vbox:
+                        spacing 14
+                        if not store.diary_entries:
+                            text "这一页还是空白的。" size 16 color "#8a6a52"
+                        else:
+                            for entry in store.diary_entries:
+                                vbox:
+                                    spacing 4
+                                    text (entry["day_label"] + " · " + entry["scene_label"] + " · " + entry["label"]):
+                                        size 12
+                                        color "#a07858"
+                                    text ("「" + entry["quote"] + "」"):
+                                        size 17
+                                        color "#3d2a22"
+                                        xsize 360
+                                        substitute False
+                                    text entry["note"]:
+                                        size 14
+                                        color "#6e5344"
+                                        italic True
+                                        xsize 360
+                                        substitute False
+
+    elif store.log_expanded:
         ## ---------------- 右侧聊天记录抽屉（不遮女主） ----------------
         frame:
             background Solid("#0a0e16f2")
@@ -175,15 +232,20 @@ screen chat_ui():
                         null width 6
                         text "Enter 发送，上面是可参考的说法，点一下填进输入框，可以自己改" size 12 color "#6f7d94" yalign 0.6
 
-        ## ---------------- 右上角：展开聊天记录 ----------------
-        textbutton ("聊天记录 (%d)" % len(store.chat_log)):
-            style "log_button"
+        ## ---------------- 右上角：便签本 / 聊天记录 ----------------
+        hbox:
             xalign 1.0
             xoffset -16
             yoffset 14
-            action SetVariable("log_expanded", True)
+            spacing 8
+            textbutton ("便签本" if store.diary_count == 0 else ("便签本 (%d)%s" % (store.diary_count, " · 新" if store.diary_banner else ""))):
+                style "log_button"
+                action Function(atb_open_diary)
+            textbutton ("聊天记录 (%d)" % len(store.chat_log)):
+                style "log_button"
+                action SetVariable("log_expanded", True)
 
-    key "K_RETURN" action If(not store.log_expanded and store.panel_mode == "dialogue" and store.input_text.strip() != "", Return(("send", store.input_text)), NullAction())
+    key "K_RETURN" action If(not store.log_expanded and not store.diary_open and store.panel_mode == "dialogue" and store.input_text.strip() != "", Return(("send", store.input_text)), NullAction())
 
 
 transform day_break_line1:

@@ -119,6 +119,18 @@ def build_record(
             "resolved": resolved,
             "abandoned": abandoned,
         },
+        "diary": [
+            {
+                "turn": item.get("turn"),
+                "day_label": item.get("day_label", ""),
+                "scene_label": item.get("scene_label", ""),
+                "label": item.get("label", ""),
+                "quote": item.get("quote", ""),
+                "note": item.get("note", ""),
+            }
+            for item in (state.get("diary") or [])
+            if isinstance(item, dict) and item.get("quote")
+        ],
         "llm": stats,
         "transcript": [
             {"turn": t["turn_index"], "role": t["role"], "text": t["text"]}
@@ -162,6 +174,20 @@ def to_markdown(record: dict[str, Any]) -> str:
         lines.append("未完成/放弃：")
         for item in abandoned:
             lines.append(f"- `{item['event_id']}`（{item.get('reason') or '—'}）")
+
+    diary = record.get("diary") or []
+    lines += ["", "## 许栀的便签本", ""]
+    if diary:
+        for item in diary:
+            where = " · ".join(
+                part for part in (item.get("day_label"), item.get("scene_label"), item.get("label")) if part
+            )
+            lines.append(f"- {where}" if where else "- 一页便签")
+            lines.append(f"  > 「{item.get('quote', '')}」")
+            if item.get("note"):
+                lines.append(f"  > {item['note']}")
+    else:
+        lines.append("- 这一局她没有往便签本上写字。")
 
     lines += ["", "## 完整对话", ""]
     for item in record.get("transcript", []):

@@ -18,6 +18,7 @@ from ..narrative.storylets import Storylet
 from ..rules.actions import ACTIONS
 from ..rules.meaningful_turn import Analysis
 from ..rules.npc_intents import prompt_lines as npc_intent_lines
+from ..rules.diary import prompt_lines as diary_prompt_lines
 
 _SYSTEM_FILE = PROMPTS_DIR / "character_system.txt"
 _CRAFT_DIR = PROMPTS_DIR / "writing"
@@ -227,12 +228,19 @@ def user_prompt(
         "【你记得的事】",
     ]
 
-    if memories:
-        parts += [f"- {m['content']}" for m in memories]
+    remembered = [m for m in memories if m.get("kind") != "diary"]
+    if remembered:
+        parts += [f"- {m['content']}" for m in remembered]
     else:
         parts.append("- （还没有特别值得记住的事）")
 
-    parts += ["", "【最近说过的话】"]
+    parts += [
+        "",
+        "【便签本】你随手记下玩家亲口说过的话。这是你的笔记本，不是清单。",
+        *diary_prompt_lines(state),
+        "",
+        "【最近说过的话】",
+    ]
     recent = _recent_lines(recent_turns)
     parts += recent if recent else ["- （这是你们今天的第一句话）"]
 
@@ -284,6 +292,7 @@ def user_prompt(
         "【硬性要求】",
         "- 台词 1–3 句，尽量短，符合 17 岁高中生口语；不要一段长篇独白。",        "- **先接住玩家刚说的这句话**（哪怕只是应一声、反问一句、把话题挡回去），再让当前事件的情境自然发生；"
         "不要为了演事件而无视玩家。",
+        "- 如果【便签本】里有玩家的原话，被问到时就接住那一句；本子上没有的，就老实说没写下来，不要编。",
         "- 可以回避、嘴硬、转移话题；但**不讽刺、不贬低、不赶人**。嘴硬是保护色，不是伤人。",
         "- 每句台词必须给玩家留一个「能接的话头」：一个问题、一个没说完的动作、一个可追问的细节，"
         "或者一句只说了一半的话；不要让对话死在你这里。",

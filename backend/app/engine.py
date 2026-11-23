@@ -28,6 +28,7 @@ from .rules import endings as ending_rules
 from .rules import meaningful_turn, storylet_resolution, suggestions as suggestion_rules
 from .rules import npc_intents
 from .rules import storylet_progress as progress_rules
+from .rules import diary as diary_rules
 from .rules import threads as thread_rules
 
 OPENING_NARRATION = [
@@ -344,10 +345,13 @@ class Engine:
                             "payload": {"reason": ev.reason, "evidence": state.get("storylet_evidence", {})},
                         })
 
-        # 6. 回合计数
+        # 6. 回合计数，并把值得留下的原话写进她的便签本
         state["turn_index"] += 1
         if analysis.is_meaningful:
             state["meaningful_turns"] += 1
+        diary_entry = diary_rules.commit_if_worth(state, analysis, state["turn_index"])
+        if diary_entry is not None:
+            memories.append(diary_rules.as_memory(diary_entry))
 
         # 7. 场景推进：保证第一天的校门口、第二天的教室/校门口自然出现
         before_scene, before_day = state["scene"], int(state.get("day", 1))
@@ -495,6 +499,7 @@ class Engine:
             storylet=current_active,
             ending_block=ending_block,
             notes=notes,
+            diary_entry=diary_entry,
         )
 
         if not self.db.save_state_cas(state, base_version, request_id, "interact", response):
@@ -722,6 +727,19 @@ class Engine:
         else:
             payload["state"] = self._public_state(state)
         return payload
+
+    def get_diary(self, game_id: str) -> dict[str, Any]:
+        """当前时间线的便签本。读档后的新分支只看得到读档点之前的页。"""
+        state = self.db.load_state(game_id)
+        if state is None:
+            raise GameNotFound(game_id)
+        pages = diary_rules.entries(state)
+        return {
+            "game_id": game_id,
+            "branch_id": state.get("branch_id", "main"),
+            "count": len(pages),
+            "entries": pages,
+        }
 
     def get_events(self, game_id: str) -> dict[str, Any]:
         state = self.db.load_state(game_id)
@@ -1034,8 +1052,10 @@ class Engine:
         storylet: Any,
         ending_block: dict[str, Any] | None,
         notes: list[str],
+        diary_entry: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         presentation = self._presentation(state)
+        diary_view = diary_rules.view(state, diary_entry)
         if storylet is not None:
             presentation["event_title"] = storylet.title
             presentation["event_badge"] = True
@@ -1058,11 +1078,13 @@ class Engine:
             "state": self._public_state(state),
             "ending": ending_block,
             "suggestions": suggestion_rules.suggestions(state, storylet),
+            "diary": diary_view,
             "ui_hints": {
                 "dialogue_source": reply.source,
                 "meaningful": analysis.is_meaningful,
                 "meaningful_reason": analysis.meaningful_reason,
                 "mood_shift": self._mood_shift(changes),
+                "diary_notice": diary_view["notice"],
                 "notes": notes,
                 "llm": {
                     "model": reply.model or None,

@@ -139,6 +139,8 @@ def default_state(game_id: str, goals: list[str], budget: int = 12) -> dict[str,
         "used_storylets": [],
         "ending_phase": "none",
         "ending_id": None,
+        # 许栀的便签本：只记玩家亲口说过、值得留下来的话。
+        "diary": [],
         "budget": {
             "max_meaningful_turns": budget,
             "soft_end_at": max(6, budget - 1),

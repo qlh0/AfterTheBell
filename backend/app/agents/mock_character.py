@@ -15,6 +15,7 @@ from typing import Any
 
 from .. import game_state as gs
 from ..narrative.storylets import Storylet
+from ..rules import diary as diary_rules
 from ..rules.meaningful_turn import Analysis, primary_topic
 from ..rules.outcome_rules import default_outcome
 
@@ -247,6 +248,17 @@ def reply(
 ) -> AgentReply:
     idx = state["turn_index"]
     emotion = gs.derive_emotion(state)
+
+    # 她被问到便签本时，用已经写下的原话回答；事件进行中不打断事件台词。
+    if storylet is None and "class_change" not in analysis.topics:
+        remembered = diary_rules.recall_reply(state, analysis)
+        if remembered:
+            return AgentReply(
+                dialogue=remembered,
+                emotion=emotion,
+                actions=analysis.actions,
+                source="mock",
+            )
 
     if storylet is not None and storylet.kind == "finale":
         # 她是否给出最后的答复，取决于玩家这一句是否真的把话推进了一步

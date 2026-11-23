@@ -59,6 +59,13 @@ def show_turn(data: dict, text: str, verbose: bool) -> None:
     for line in data.get("narration", []):
         print(f"     * {line}")
     print(f"许栀 > {data['dialogue']}")
+    diary = data.get("diary") or {}
+    if diary.get("updated"):
+        entry = diary.get("entry") or {}
+        print(f"     ✎ {diary.get('notice')}")
+        print(f"       [{entry.get('label', '')}] 「{entry.get('quote', '')}」")
+        if entry.get("note"):
+            print(f"       {entry['note']}")
     if data.get("ui_hints", {}).get("mood_shift"):
         print(f"     （{data['ui_hints']['mood_shift']}）")
     if verbose:
@@ -107,7 +114,7 @@ def print_ending(ending: dict) -> None:
 def run_interactive(engine: Engine, verbose: bool) -> None:
     start = engine.start()
     game_id = start["game_id"]
-    print(f"=== 开局 {game_id}（输入 :quit 退出，:advance 推进）===")
+    print(f"=== 开局 {game_id}（输入 :quit 退出，:advance 推进，:diary 翻便签本）===")
     for line in start["narration"]:
         print(f"     * {line}")
     print(f"许栀 > {start['dialogue']}")
@@ -121,6 +128,16 @@ def run_interactive(engine: Engine, verbose: bool) -> None:
             continue
         if text in (":quit", ":q"):
             break
+        if text == ":diary":
+            book = engine.get_diary(game_id)
+            print(f"     —— 许栀的便签本（{book['count']} 页）——")
+            if not book["entries"]:
+                print("     （还是空白的）")
+            for entry in book["entries"]:
+                print(f"     {entry['day_label']} · {entry['scene_label']} · {entry['label']}")
+                print(f"       「{entry['quote']}」")
+                print(f"       {entry['note']}")
+            continue
         try:
             if text == ":advance":
                 data = engine.advance(game_id, "req_" + uuid.uuid4().hex[:12])
